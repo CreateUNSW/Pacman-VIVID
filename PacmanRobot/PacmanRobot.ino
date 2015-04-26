@@ -2,38 +2,6 @@
 #include "RF24.h"
 
 /*
- * PACMAN RF Data Struct and utilities
- */
-
-#include "RF24.h"
-
-/*
- * Game Struct definitions
- */
-
-typedef struct _position {
-    uint8_t x : 4;
-    uint8_t y : 4;
-} position;
-
-typedef char heading;
-
-typedef struct _robot {
-    position p;
-    heading h;
-} robot;
-
-// Contains information about all robots currently in play.
-typedef struct _game_state {
-    uint8_t header;
-    uint8_t command;	
-    robot pac;
-    robot g1;
-    robot g2;
-    robot g3;
-} game_state;
-
-/*
  * Game state definitions
  */ 
 // Header
@@ -47,7 +15,7 @@ typedef struct _game_state {
 #define RESUME   5 
 #define RUN_MODE 6
 
-#define GAME_SIZE sizeof(game_state)
+#define GAME_SIZE sizeof(game_state_t)
 
 /*
  * Map definitions
@@ -66,6 +34,34 @@ typedef struct _game_state {
 #define BROADCAST_CHANNEL 72
 
 /*
+ * Game Struct definitions
+ */
+
+typedef struct {
+    uint8_t x : 4;
+    uint8_t y : 4;
+} position_t;
+
+//typedef char heading_t;
+
+typedef struct {
+    position_t p;
+    char h;
+} robot_t;
+
+// Contains information about all robots currently in play.
+typedef struct {
+    uint8_t header;
+    uint8_t command;	
+    robot_t pac;
+    robot_t g1;
+    robot_t g2;
+    robot_t g3;
+} game_state_t;
+
+typedef enum {PACMAN, GHOST1, GHOST2, GHOST3} playerType_t;
+
+/*
  * Functions to be used by robots and hub
  */
 
@@ -74,6 +70,8 @@ void init_game(void);
 void update_game(void);
 void init_game_map(void);
 void print_game(void);
+void map_expand(void);
+void check_square(int x, int y);
 /*
  * Global Variables
  */
@@ -81,9 +79,12 @@ void print_game(void);
 static const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL};
 RF24 radio(9,10);
 
-game_state game;
+playerType_t playerSelect = GHOST1;
+robot_t *thisRobot;
+
+game_state_t game;
 // Pointer to be used when updating game from radio
-game_state *g = &game;
+game_state_t *g;
 uint8_t game_map[DIM][DIM] = {
   {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
   {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
@@ -97,6 +98,7 @@ uint8_t game_map[DIM][DIM] = {
 };
 
 void setup() {
+  g = &game;
   // put your setup code here, to run once:
   Serial.begin(9600);
   init_radio();
@@ -143,7 +145,15 @@ void init_radio() {
   radio.startListening();
 }
 // Initialises the game and waits for the host to send start command
-void init_game() {  
+void init_game() {
+  // To be replaced with LCD display and button toggling!
+  switch(playerSelect){
+    case PACMAN : thisRobot = &g->pac; break;
+    case GHOST1 : thisRobot = &g->g1; break;
+    case GHOST2 : thisRobot = &g->g2; break;
+    case GHOST3 : thisRobot = &g->g3; break;
+    default  : break;
+  }
   while (game.command != START) {
     //Serial.println(game.command);
     print_game();
@@ -161,3 +171,25 @@ void update_game() {
   }
   
 }
+
+void checkSquare(int x,int y){
+  if(x<0||x>9||y<0||y>9){
+    //return NULL;
+  } else if (g->g1.p.x==x&&g->g1.p.y==y){
+    //return &g->gl;
+  } else if (g->g2.p.x==x&&g->g2.p.y==y){
+    //return &g->g2;
+  } else if (g->g3.p.x==x&&g->g3.p.y==y){
+    //return &g->g3;
+  } else {
+    //return NULL;
+  }
+}
+
+void map_expand(){
+  int x = thisRobot->p.x;
+  int y = thisRobot->p.y;
+  /*robot_t * r = */checkSquare(x,y);
+}
+
+
