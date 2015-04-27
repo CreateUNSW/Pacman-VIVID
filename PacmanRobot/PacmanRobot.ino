@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include "RF24.h"
-
+#include <stdint.h>
 /*
  * Game state definitions
  */ 
@@ -37,20 +37,20 @@
  * Game Struct definitions
  */
 
-typedef struct {
+typedef struct _position_t{
     uint8_t x : 4;
     uint8_t y : 4;
 } position_t;
 
-//typedef char heading_t;
+typedef char heading_t;
 
-typedef struct {
+typedef struct _robot_t{
     position_t p;
-    char h;
+    heading_t h;
 } robot_t;
 
 // Contains information about all robots currently in play.
-typedef struct {
+typedef struct _game_state_t{
     uint8_t header;
     uint8_t command;	
     robot_t pac;
@@ -61,17 +61,6 @@ typedef struct {
 
 typedef enum {PACMAN, GHOST1, GHOST2, GHOST3} playerType_t;
 
-/*
- * Functions to be used by robots and hub
- */
-
-void init_radio(void);
-void init_game(void);
-void update_game(void);
-void init_game_map(void);
-void print_game(void);
-void map_expand(void);
-void check_square(int x, int y);
 /*
  * Global Variables
  */
@@ -84,7 +73,7 @@ robot_t *thisRobot;
 
 game_state_t game;
 // Pointer to be used when updating game from radio
-game_state_t *g;
+game_state_t *g = &game;
 uint8_t game_map[DIM][DIM] = {
   {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
   {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
@@ -97,13 +86,25 @@ uint8_t game_map[DIM][DIM] = {
   {U|R,   R|L,    R|L,    U|R|L,  R|L,   U|R|L,  R|L,    R|L,    U|L}
 };
 
+
+/*
+ * Functions to be used by robots and hub
+ */
+
+void init_radio(void);
+void init_game(void);
+void update_game(void);
+void init_game_map(void);
+void print_game(void);
+void map_expand(void);
+uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
+
 void setup() {
-  g = &game;
   // put your setup code here, to run once:
   Serial.begin(9600);
-  init_radio();
-  Serial.println(GAME_SIZE);
-  init_game(); 
+  //init_radio();
+  //Serial.println(GAME_SIZE);
+  //init_game(); 
 }
 
 void loop() {
@@ -120,8 +121,8 @@ void loop() {
     default    : break; //Do nothing 
   }
   
-  
 }
+
 void print_game() {
    int i;
    for (i = 0; i < GAME_SIZE; i++) {
@@ -133,6 +134,7 @@ void print_game() {
    Serial.println();
    Serial.println();Serial.println();
 }
+
 void init_radio() {
   radio.begin();
   radio.setRetries(15,15);
@@ -172,24 +174,31 @@ void update_game() {
   
 }
 
-void checkSquare(int x,int y){
+uint8_t* check_square(int x,int y){
+  robot_t *R_2 = NULL;
+  robot_t *r;
   if(x<0||x>9||y<0||y>9){
-    //return NULL;
+    r = NULL;
   } else if (g->g1.p.x==x&&g->g1.p.y==y){
-    //return &g->gl;
+    r = &g->g1;
   } else if (g->g2.p.x==x&&g->g2.p.y==y){
-    //return &g->g2;
+    r = &g->g2;
   } else if (g->g3.p.x==x&&g->g3.p.y==y){
-    //return &g->g3;
+    r = &g->g3;
   } else {
-    //return NULL;
+    r = NULL;
   }
+  return (uint8_t*)R_2;
+}
+
+bool is_intersection(uint8_t square){
+  
 }
 
 void map_expand(){
   int x = thisRobot->p.x;
   int y = thisRobot->p.y;
-  /*robot_t * r = */checkSquare(x,y);
+  robot_t * r = (robot_t *)check_square(x,y);
 }
 
 
