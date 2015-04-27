@@ -1,6 +1,9 @@
 #include <SPI.h>
 #include "RF24.h"
 #include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 /*
  * Game state definitions
  */ 
@@ -61,6 +64,11 @@ typedef struct _game_state_t{
 
 typedef enum {PACMAN, GHOST1, GHOST2, GHOST3} playerType_t;
 
+// keep these consistent please
+#define PLAYER GHOST1
+#define PLAYER_STRING "GHOST1"
+
+
 /*
  * Global Variables
  */
@@ -68,17 +76,21 @@ typedef enum {PACMAN, GHOST1, GHOST2, GHOST3} playerType_t;
 static const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL};
 RF24 radio(9,10);
 
-playerType_t playerSelect = GHOST1;
+playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 
 game_state_t game;
 // Pointer to be used when updating game from radio
 game_state_t *g = &game;
+
+// note: for error checking, we will refer to board with indices 1-9 not 0-8
+// exit of "ghost cave" has been made one directional, could change easily for
+// end of game or hiding mode (at x(column)=5,y(row)=4, R|L->R|D|L
 uint8_t game_map[DIM][DIM] = {
   {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
   {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
   {U|R,   U|D|L,  U|R,    D|L,    0,     R|D,    U|L,    U|R|D,  U|L},
-  {0,     U|D,    R|D,    U|R|L,  R|D|L, U|R|L,  D|L,    U|D,    0  },
+  {0,     U|D,    R|D,    U|R|L,  R|L, U|R|L,  D|L,    U|D,    0  },
   {R|D,   U|R|D|L,U|D|L,  R,      U|R|L, L,      U|R|D,  U|R|D|L,D|L},
   {U|D,   U|D,    U|R,    R|D|L,  R|L,   R|D|L,  U|L,    U|D,    U|D},
   {U|R,   U|D|L,  R|D,    U|R|D|L,R|L,   U|R|D|L,D|L,    U|R|D,  U|L},
@@ -98,16 +110,20 @@ void init_game_map(void);
 void print_game(void);
 void map_expand(void);
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
+uint8_t *expand(int x,int y, heading_t h);
+void enter_robot_location(robot_t * entry);
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   //init_radio();
+  //randomSeed(micros());
   //Serial.println(GAME_SIZE);
-  //init_game(); 
+  init_game(); 
 }
 
 void loop() {
+  /*
   // put your main code here, to run repeatedly:
   update_game();
   // If header is wrong, return to receive update again
@@ -120,7 +136,19 @@ void loop() {
     case HIDE  : break; //Do something
     default    : break; //Do nothing 
   }
+  */
+  Serial.print("Welcome player ");
+  Serial.println(PLAYER_STRING);
+  Serial.println("Please enter ghost 1");
+  enter_robot_location(&game.g1);
+  Serial.println("Please enter ghost 2");
+  enter_robot_location(&game.g2);
+  Serial.println("Please enter ghost 3");
+  enter_robot_location(&game.g3);
   
+  
+  map_expand();
+    
 }
 
 void print_game() {
@@ -156,13 +184,13 @@ void init_game() {
     case GHOST3 : thisRobot = &g->g3; break;
     default  : break;
   }
-  while (game.command != START) {
+  /*while (game.command != START) {
     //Serial.println(game.command);
     print_game();
     update_game();
     //delay(1000);
   }
-  Serial.println("The game has begun!"); 
+  Serial.println("The game has begun!"); */
 }
 
 void update_game() {
@@ -175,9 +203,8 @@ void update_game() {
 }
 
 uint8_t* check_square(int x,int y){
-  robot_t *R_2 = NULL;
   robot_t *r;
-  if(x<0||x>9||y<0||y>9){
+  if(x<1||x>9||y<1||y>9){
     r = NULL;
   } else if (g->g1.p.x==x&&g->g1.p.y==y){
     r = &g->g1;
@@ -188,17 +215,91 @@ uint8_t* check_square(int x,int y){
   } else {
     r = NULL;
   }
-  return (uint8_t*)R_2;
+  return (uint8_t*)r;
 }
 
 bool is_intersection(uint8_t square){
-  
+  int dirCount = 0;
+  dirCount += (square&U)>0;
+  dirCount += (square&R)>0;
+  dirCount += (square&D)>0;
+  dirCount += (square&L)>0;
+  return (dirCount>2);
 }
 
 void map_expand(){
   int x = thisRobot->p.x;
   int y = thisRobot->p.y;
-  robot_t * r = (robot_t *)check_square(x,y);
+  char h = thisRobot->h;
+  uint8_t *r;
+  // expands along 
+  if((game_map[y-1][x-1]&U)>0&&h!='d'){
+    r = expand(x,y-1,'u');
+    if(r==NULL) Serial.println("Up path available");
+  }
+  if((game_map[y-1][x-1]&R)>0&&h!='l'){
+    r = expand(x+1,y,'r');
+    if(r==NULL) Serial.println("Right path available");
+  }
+  if((game_map[y-1][x-1]&D)>0&&h!='u'){
+    r = expand(x,y+1,'d');
+    if(r==NULL) Serial.println("Down path available");
+  }
+  if((game_map[y-1][x-1]&L)>0&&h!='r'){
+    r = expand(x-1,y,'l');
+    if(r==NULL) Serial.println("Left path available");
+  }
 }
+
+uint8_t *expand(int x,int y, heading_t h){
+  // Debug output
+  Serial.print("Checking: ");
+  Serial.print(x); Serial.print(" "); Serial.println(y);
+  if(x<1||x>9||y<1||y>9){
+    return NULL;
+  }
+  uint8_t * r = check_square(x,y);
+  if(r!=NULL){
+    // return r;
+  } else if(!is_intersection(game_map[y-1][x-1])){
+    if((game_map[y-1][x-1]&U)>0&&h!='d'){
+      r = expand(x,y-1,'u');
+    } else if((game_map[y-1][x-1]&R)>0&&h!='l'){
+      r = expand(x+1,y,'r');
+    } else if((game_map[y-1][x-1]&D)>0&&h!='u'){
+      r = expand(x,y+1,'d');
+    } else if((game_map[y-1][x-1]&L)>0&&h!='r'){
+      r = expand(x-1,y,'l');
+    }
+  }
+  return r;
+  
+}
+// test function only
+void enter_robot_location(robot_t * entry){
+  int x;
+  int y;
+  char temp;
+  heading_t h;
+  Serial.println("Please enter x y heading in format xyh");
+  while(!Serial.available()){}
+  temp = Serial.read();
+  x = atoi(&temp);
+  Serial.print(x);
+  while(!Serial.available()){}
+  temp = Serial.read();
+  y = atoi(&temp);
+  Serial.print(y);
+  while(!Serial.available()){}
+  h = Serial.read();
+  Serial.println(h);
+  //Test locations
+  entry->p.x = x;
+  entry->p.y = y;
+  entry->h = h;
+}
+
+    
+  
 
 
