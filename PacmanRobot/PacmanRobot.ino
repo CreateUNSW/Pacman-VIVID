@@ -90,7 +90,7 @@ uint8_t game_map[DIM][DIM] = {
   {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
   {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
   {U|R,   U|D|L,  U|R,    D|L,    0,     R|D,    U|L,    U|R|D,  U|L},
-  {0,     U|D,    R|D,    U|R|L,  R|L, U|R|L,  D|L,    U|D,    0  },
+  {0,     U|D,    R|D,    U|R|L,  R|L,   U|R|L,  D|L,    U|D,    0  },
   {R|D,   U|R|D|L,U|D|L,  R,      U|R|L, L,      U|R|D,  U|R|D|L,D|L},
   {U|D,   U|D,    U|R,    R|D|L,  R|L,   R|D|L,  U|L,    U|D,    U|D},
   {U|R,   U|D|L,  R|D,    U|R|D|L,R|L,   U|R|D|L,D|L,    U|R|D,  U|L},
@@ -110,7 +110,7 @@ void init_game_map(void);
 void print_game(void);
 void map_expand(void);
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
-uint8_t *expand(int x,int y, heading_t h);
+uint8_t *expand(int *x,int *y, heading_t h);
 void enter_robot_location(robot_t * entry);
 
 void setup() {
@@ -206,6 +206,8 @@ uint8_t* check_square(int x,int y){
   robot_t *r;
   if(x<1||x>9||y<1||y>9){
     r = NULL;
+  } else if (g->pac.p.x==x&&g->pac.p.y==y){
+    r = &g->pac;
   } else if (g->g1.p.x==x&&g->g1.p.y==y){
     r = &g->g1;
   } else if (g->g2.p.x==x&&g->g2.p.y==y){
@@ -227,49 +229,69 @@ bool is_intersection(uint8_t square){
   return (dirCount>2);
 }
 
+/* To be completed
+uint8_t * collision_detect(){
+  robot_t *r;
+  int xDest = thisRobot->p.x;
+  int yDest = thisRobot->p.y;
+  char h = thisRobot->h;
+*/
+  
 void map_expand(){
   int x = thisRobot->p.x;
   int y = thisRobot->p.y;
   char h = thisRobot->h;
   uint8_t *r;
+  int tempX, tempY;
   // expands along 
   if((game_map[y-1][x-1]&U)>0&&h!='d'){
-    r = expand(x,y-1,'u');
+    tempX = x; tempY = y-1;
+    r = expand(&tempX,&tempY,'u');
     if(r==NULL) Serial.println("Up path available");
   }
   if((game_map[y-1][x-1]&R)>0&&h!='l'){
-    r = expand(x+1,y,'r');
+    tempX = x+1; tempY = y;
+    r = expand(&tempX,&tempY,'r');
     if(r==NULL) Serial.println("Right path available");
   }
   if((game_map[y-1][x-1]&D)>0&&h!='u'){
-    r = expand(x,y+1,'d');
+    tempX = x; tempY = y+1;
+    r = expand(&tempX,&tempY,'d');
     if(r==NULL) Serial.println("Down path available");
   }
   if((game_map[y-1][x-1]&L)>0&&h!='r'){
-    r = expand(x-1,y,'l');
+    tempX = x-1; tempY = y;
+    r = expand(&tempX,&tempY,'l');
     if(r==NULL) Serial.println("Left path available");
   }
 }
 
-uint8_t *expand(int x,int y, heading_t h){
+uint8_t *expand(int *x,int *y, heading_t h){
   // Debug output
   Serial.print("Checking: ");
-  Serial.print(x); Serial.print(" "); Serial.println(y);
-  if(x<1||x>9||y<1||y>9){
+  Serial.print(*x); Serial.print(" "); Serial.println(*y);
+  if(*x<1||*x>9||*y<1||*y>9){
     return NULL;
   }
-  uint8_t * r = check_square(x,y);
+  uint8_t * r = check_square(*x,*y);
   if(r!=NULL){
     // return r;
-  } else if(!is_intersection(game_map[y-1][x-1])){
-    if((game_map[y-1][x-1]&U)>0&&h!='d'){
-      r = expand(x,y-1,'u');
-    } else if((game_map[y-1][x-1]&R)>0&&h!='l'){
-      r = expand(x+1,y,'r');
-    } else if((game_map[y-1][x-1]&D)>0&&h!='u'){
-      r = expand(x,y+1,'d');
-    } else if((game_map[y-1][x-1]&L)>0&&h!='r'){
-      r = expand(x-1,y,'l');
+    if(r==(uint8_t*)&game.pac){
+      r=NULL;
+    }
+  } else if(!is_intersection(game_map[*y-1][*x-1])){
+    if((game_map[*y-1][*x-1]&U)>0&&h!='d'){
+      *y = *y-1;
+      r = expand(x,y,'u');
+    } else if((game_map[*y-1][*x-1]&R)>0&&h!='l'){
+      *x = *x+1;
+      r = expand(x,y,'r');
+    } else if((game_map[*y-1][*x-1]&D)>0&&h!='u'){
+      *y = *y+1;
+      r = expand(x,y,'d');
+    } else if((game_map[*y-1][*x-1]&L)>0&&h!='r'){
+      *x = *x+1;
+      r = expand(x,y,'l');
     }
   }
   return r;
