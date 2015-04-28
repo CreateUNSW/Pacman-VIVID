@@ -7,6 +7,8 @@
 /*
  * Game state definitions
  */ 
+ 
+#define NUM_GHOSTS 3
 // Header
 #define HEADER 0xC8
 
@@ -57,16 +59,14 @@ typedef struct _game_state_t{
     uint8_t header;
     uint8_t command;	
     robot_t pac;
-    robot_t g1;
-    robot_t g2;
-    robot_t g3;
+    robot_t g[NUM_GHOSTS];
 } game_state_t;
 
-typedef enum {PACMAN, GHOST1, GHOST2, GHOST3} playerType_t;
+typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER GHOST1
-#define PLAYER_STRING "GHOST1"
+#define PLAYER GHOST2
+#define PLAYER_STRING "GHOST2"
 
 
 /*
@@ -81,12 +81,12 @@ robot_t *thisRobot;
 
 game_state_t game;
 // Pointer to be used when updating game from radio
-game_state_t *g = &game;
+//game_state_t *g = &game;
 
 // note: for error checking, we will refer to board with indices 1-9 not 0-8
 // exit of "ghost cave" has been made one directional, could change easily for
 // end of game or hiding mode (at x(column)=5,y(row)=4, R|L->R|D|L
-uint8_t game_map[DIM][DIM] = {
+const uint8_t game_map[DIM][DIM] = {
   {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
   {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
   {U|R,   U|D|L,  U|R,    D|L,    0,     R|D,    U|L,    U|R|D,  U|L},
@@ -97,6 +97,12 @@ uint8_t game_map[DIM][DIM] = {
   {R|D,   U|R|L,  U|L,    U|D,    0,     U|D,    U|R,    U|R|L,  D|L},
   {U|R,   R|L,    R|L,    U|R|L,  R|L,   U|R|L,  R|L,    R|L,    U|L}
 };
+
+//Variables for smart map expansion
+const uint8_t subDir = 0b1001;
+const uint8_t addDir = 0b0110;
+const uint8_t xx = 0b0101;
+const uint8_t yy = 0b1010;
 
 
 /*
@@ -109,8 +115,12 @@ void update_game(void);
 void init_game_map(void);
 void print_game(void);
 void map_expand(void);
+bool is_intersection(int x, int y);
+bool is_open(int x, int y, heading_t dir);
+
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t *expand(int *x,int *y, heading_t h);
+uint8_t *expand_single(int *x,int *y,heading_t h);
 void enter_robot_location(robot_t * entry);
 
 void setup() {
@@ -139,15 +149,14 @@ void loop() {
   */
   Serial.print("Welcome player ");
   Serial.println(PLAYER_STRING);
-  Serial.println("Please enter ghost 1");
-  enter_robot_location(&game.g1);
-  Serial.println("Please enter ghost 2");
-  enter_robot_location(&game.g2);
-  Serial.println("Please enter ghost 3");
-  enter_robot_location(&game.g3);
-  
-  
+  int i;
+  for(i=0;i<NUM_GHOSTS;i++){
+    Serial.print("Please enter ghost ");
+    Serial.println(i+1);
+    enter_robot_location(&game.g[i]);
+  }
   map_expand();
+  //collision_detect();
     
 }
 
@@ -157,7 +166,7 @@ void print_game() {
       Serial.print("Byte ");
       Serial.print(i);
       Serial.print(": ");
-      Serial.println(*((char *)g+i), DEC);
+      Serial.println(*((char *)&game+i), DEC);
    } 
    Serial.println();
    Serial.println();Serial.println();
@@ -178,11 +187,8 @@ void init_radio() {
 void init_game() {
   // To be replaced with LCD display and button toggling!
   switch(playerSelect){
-    case PACMAN : thisRobot = &g->pac; break;
-    case GHOST1 : thisRobot = &g->g1; break;
-    case GHOST2 : thisRobot = &g->g2; break;
-    case GHOST3 : thisRobot = &g->g3; break;
-    default  : break;
+    case PACMAN : thisRobot = &game.pac; break;    
+    default  : thisRobot = &game.g[playerSelect-1]; break;
   }
   /*while (game.command != START) {
     //Serial.println(game.command);
@@ -197,30 +203,35 @@ void update_game() {
   int i;
   if (radio.available()) {
     //Serial.println("Data available");
-    radio.read((char *)g,GAME_SIZE);
+    radio.read((char *)&game,GAME_SIZE);
   }
   
 }
 
 uint8_t* check_square(int x,int y){
-  robot_t *r;
+  robot_t *r = NULL;
   if(x<1||x>9||y<1||y>9){
     r = NULL;
-  } else if (g->pac.p.x==x&&g->pac.p.y==y){
-    r = &g->pac;
-  } else if (g->g1.p.x==x&&g->g1.p.y==y){
-    r = &g->g1;
-  } else if (g->g2.p.x==x&&g->g2.p.y==y){
-    r = &g->g2;
-  } else if (g->g3.p.x==x&&g->g3.p.y==y){
-    r = &g->g3;
-  } else {
-    r = NULL;
+  }/* else if (game.pac.p.x==x&&game.pac.p.y==y){
+    r = &game.pac;
+  } */ // probably shouldn't consider pacman's location
+  else {
+    int i;
+    for(i=0;i<NUM_GHOSTS;i++){
+      if (game.g[i].p.x==x&&game.g[i].p.y==y){
+        r = &game.g[i];
+        break;
+      }
+    }
   }
   return (uint8_t*)r;
 }
 
-bool is_intersection(uint8_t square){
+bool is_intersection(int x, int y){
+  if(x<1||x>9||y<1||y>9){
+    return false;
+  }
+  uint8_t square = game_map[y-1][x-1];
   int dirCount = 0;
   dirCount += (square&U)>0;
   dirCount += (square&R)>0;
@@ -229,13 +240,83 @@ bool is_intersection(uint8_t square){
   return (dirCount>2);
 }
 
-/* To be completed
-uint8_t * collision_detect(){
+bool is_open(int x, int y, heading_t dir){
+  if(x<1||x>9||y<1||y>9){
+    return false;
+  }
+  uint8_t square = game_map[y-1][x-1];
+  uint8_t testDir;
+  switch(dir){
+    case 'u' : testDir = U; break;
+    case 'r' : testDir = R; break;
+    case 'd' : testDir = D; break;
+    case 'l' : testDir = L; break;
+    default  : testDir = 0b1111; break;
+  }
+  return ((square&testDir)>0);
+}
+
+bool collision_detect(){
   robot_t *r;
+  bool collision = false;
   int xDest = thisRobot->p.x;
   int yDest = thisRobot->p.y;
-  char h = thisRobot->h;
-*/
+  heading_t h = thisRobot->h;
+  if (is_intersection(xDest,yDest)){
+    uint8_t testDir;
+    switch(h){
+      case 'u' : testDir = U; break;
+      case 'r' : testDir = R; break;
+      case 'd' : testDir = D; break;
+      case 'l' : testDir = L; break;
+      default  : testDir = R; break;
+    }
+    // force look at the next intersection
+    if(is_open(xDest,yDest,h)){
+      xDest = xDest + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
+      yDest = yDest + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+    }
+  }
+  expand_single(&xDest,&yDest,h);
+  // possibility to expand a second time if need be
+  if (!is_intersection(xDest,yDest)){
+    return false; // if we're not about to reach intersection, don't worry!
+    // may want to alter behaviour to keep spacing in future
+  }
+  int i;
+  int xDestCheck, yDestCheck;
+  heading_t hCheck;
+  for(i=0;i<NUM_GHOSTS;i++){
+    if(i!=playerSelect-1){ //don't check with yourself
+      r = &game.g[i];
+      xDestCheck = r->p.x;
+      yDestCheck = r->p.y;
+      hCheck = r->h;
+      if(is_intersection(xDestCheck,yDestCheck)){
+        if(xDestCheck==xDest&&yDestCheck==yDest){
+          //stop our ghost robot from colliding!
+          //need to insert relevant action (i know what i want to do, just have to do it)
+          Serial.println("Stop the bot!");
+          collision = true;
+          break;
+        }
+      } else {
+        expand_single(&xDestCheck,&yDestCheck,hCheck);
+        if(xDestCheck==xDest&&yDestCheck==yDest){
+          if(i<playerSelect-1){
+            //the incoming ghost is a higher priority! let them go first!
+            Serial.println("Stop the bot!");
+            collision = true;
+            break;
+          } else {
+            // we want to go through the intersection first, assume they will stop
+          }
+        }
+      }
+    }
+  }
+  return collision;
+}
   
 void map_expand(){
   int x = thisRobot->p.x;
@@ -244,25 +325,45 @@ void map_expand(){
   uint8_t *r;
   int tempX, tempY;
   // expands along 
-  if((game_map[y-1][x-1]&U)>0&&h!='d'){
+  if(is_open(x,y,'u')&&h!='d'){
     tempX = x; tempY = y-1;
     r = expand(&tempX,&tempY,'u');
-    if(r==NULL) Serial.println("Up path available");
+    if(r==NULL) {
+      thisRobot->h = 'u';
+      if(!collision_detect()){
+        Serial.println("Up path available");
+      }
+    }
   }
-  if((game_map[y-1][x-1]&R)>0&&h!='l'){
+  if(is_open(x,y,'r')&&h!='l'){
     tempX = x+1; tempY = y;
     r = expand(&tempX,&tempY,'r');
-    if(r==NULL) Serial.println("Right path available");
+    if(r==NULL) {
+      thisRobot->h = 'r';
+      if(!collision_detect()){
+        Serial.println("Right path available");
+      }
+    }
   }
-  if((game_map[y-1][x-1]&D)>0&&h!='u'){
+  if(is_open(x,y,'d')&&h!='u'){
     tempX = x; tempY = y+1;
     r = expand(&tempX,&tempY,'d');
-    if(r==NULL) Serial.println("Down path available");
+    if(r==NULL) {
+      thisRobot->h = 'd';
+      if(!collision_detect()){
+        Serial.println("Down path available");
+      }
+    }
   }
-  if((game_map[y-1][x-1]&L)>0&&h!='r'){
+  if(is_open(x,y,'l')&&h!='r'){
     tempX = x-1; tempY = y;
     r = expand(&tempX,&tempY,'l');
-    if(r==NULL) Serial.println("Left path available");
+    if(r==NULL) {
+      thisRobot->h = 'l';
+      if(!collision_detect()){
+        Serial.println("Left path available");
+      }
+    }
   }
 }
 
@@ -279,17 +380,32 @@ uint8_t *expand(int *x,int *y, heading_t h){
     if(r==(uint8_t*)&game.pac){
       r=NULL;
     }
-  } else if(!is_intersection(game_map[*y-1][*x-1])){
-    if((game_map[*y-1][*x-1]&U)>0&&h!='d'){
+  } else if(!is_intersection(*x,*y)){
+    // Start potentially redundant code]
+    // Checks to expand along direction robot is heading first
+    uint8_t testDir;
+    switch(h){
+      case 'u' : testDir = U; break;
+      case 'r' : testDir = R; break;
+      case 'd' : testDir = D; break;
+      case 'l' : testDir = L; break;
+      default  : testDir = R; break;
+    }
+    if(is_open(*x,*y,h)){
+      *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
+      *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+      r = expand(x,y,h);
+    } // end potentially redundant code 
+    else if(is_open(*x,*y,'u')&&h!='d'){
       *y = *y-1;
       r = expand(x,y,'u');
-    } else if((game_map[*y-1][*x-1]&R)>0&&h!='l'){
+    } else if(is_open(*x,*y,'r')&&h!='l'){
       *x = *x+1;
       r = expand(x,y,'r');
-    } else if((game_map[*y-1][*x-1]&D)>0&&h!='u'){
+    } else if(is_open(*x,*y,'d')&&h!='u'){
       *y = *y+1;
       r = expand(x,y,'d');
-    } else if((game_map[*y-1][*x-1]&L)>0&&h!='r'){
+    } else if(is_open(*x,*y,'l')&&h!='r'){
       *x = *x+1;
       r = expand(x,y,'l');
     }
@@ -297,6 +413,45 @@ uint8_t *expand(int *x,int *y, heading_t h){
   return r;
   
 }
+
+uint8_t *expand_single(int *x,int *y,heading_t h){
+  if(*x<1||*x>9||*y<1||*y>9){
+    return NULL;
+  }
+  uint8_t * r = NULL;//check_square(*x,*y);
+  if(!is_intersection(*x,*y)){
+    // Start potentially redundant code]
+    // Checks to expand along direction robot is heading first
+    uint8_t testDir;
+    switch(h){
+      case 'u' : testDir = U; break;
+      case 'r' : testDir = R; break;
+      case 'd' : testDir = D; break;
+      case 'l' : testDir = L; break;
+      default  : testDir = R; break;
+    }
+    if(is_open(*x,*y,h)){
+      *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
+      *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+      r = check_square(*x,*y);
+    } // end potentially redundant code 
+    else if(is_open(*x,*y,'u')&&h!='d'){
+      *y = *y-1;
+      r = check_square(*x,*y);
+    } else if(is_open(*x,*y,'r')&&h!='l'){
+      *x = *x+1;
+      r = check_square(*x,*y);
+    } else if(is_open(*x,*y,'d')&&h!='u'){
+      *y = *y+1;
+      r = check_square(*x,*y);
+    } else if(is_open(*x,*y,'l')&&h!='r'){
+      *x = *x+1;
+      r = check_square(*x,*y);
+    }
+  }
+  return r;
+}
+
 // test function only
 void enter_robot_location(robot_t * entry){
   int x;
