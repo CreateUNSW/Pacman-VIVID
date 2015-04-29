@@ -1,4 +1,5 @@
 #include <SPI.h>
+#include <Stepper.h>
 #include "RF24.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -62,12 +63,24 @@ typedef struct _game_state_t{
     robot_t g[NUM_GHOSTS];
 } game_state_t;
 
+
+/*
+ * Local definitions
+ */
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
 #define PLAYER GHOST2
 #define PLAYER_STRING "GHOST2"
 
+#define STEPS_PER_REV 200
+#define STEPPER_SPEED 100
+
+Stepper m_topLeft(STEPS_PER_REV,22,24,26,28);
+Stepper m_topRight(STEPS_PER_REV,23,25,27,29);
+Stepper m_bottomLeft(STEPS_PER_REV,32,34,36,38);
+Stepper m_bottomRight(STEPS_PER_REV,33,35,37,39);
+  
 
 /*
  * Global Variables
@@ -78,6 +91,8 @@ RF24 radio(9,10);
 
 playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
+uint16_t robotSpeed = STEPPER_SPEED;
+position_t goal;
 
 game_state_t game;
 // Pointer to be used when updating game from radio
@@ -119,11 +134,16 @@ bool is_intersection(int x, int y);
 bool is_open(int x, int y, heading_t dir);
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
-uint8_t *expand(int *x,int *y, heading_t h);
-uint8_t *expand_single(int *x,int *y,heading_t h);
+uint8_t* expand(int *x,int *y, heading_t h);
+uint8_t* expand_single(int *x,int *y,heading_t h);
+uint8_t heading2binary(heading_t h);
 void enter_robot_location(robot_t * entry);
 
 void setup() {
+  m_topLeft.setSpeed(STEPPER_SPEED);
+  m_topRight.setSpeed(STEPPER_SPEED);
+  m_bottomLeft.setSpeed(STEPPER_SPEED);
+  m_bottomRight.setSpeed(STEPPER_SPEED);
   // put your setup code here, to run once:
   Serial.begin(9600);
   //init_radio();
@@ -245,14 +265,7 @@ bool is_open(int x, int y, heading_t dir){
     return false;
   }
   uint8_t square = game_map[y-1][x-1];
-  uint8_t testDir;
-  switch(dir){
-    case 'u' : testDir = U; break;
-    case 'r' : testDir = R; break;
-    case 'd' : testDir = D; break;
-    case 'l' : testDir = L; break;
-    default  : testDir = 0b1111; break;
-  }
+  uint8_t testDir = heading2binary(dir);
   return ((square&testDir)>0);
 }
 
@@ -263,14 +276,7 @@ bool collision_detect(){
   int yDest = thisRobot->p.y;
   heading_t h = thisRobot->h;
   if (is_intersection(xDest,yDest)){
-    uint8_t testDir;
-    switch(h){
-      case 'u' : testDir = U; break;
-      case 'r' : testDir = R; break;
-      case 'd' : testDir = D; break;
-      case 'l' : testDir = L; break;
-      default  : testDir = R; break;
-    }
+    uint8_t testDir = heading2binary(h);
     // force look at the next intersection
     if(is_open(xDest,yDest,h)){
       xDest = xDest + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
@@ -367,7 +373,7 @@ void map_expand(){
   }
 }
 
-uint8_t *expand(int *x,int *y, heading_t h){
+uint8_t* expand(int *x,int *y, heading_t h){
   // Debug output
   Serial.print("Checking: ");
   Serial.print(*x); Serial.print(" "); Serial.println(*y);
@@ -381,16 +387,9 @@ uint8_t *expand(int *x,int *y, heading_t h){
       r=NULL;
     }
   } else if(!is_intersection(*x,*y)){
-    // Start potentially redundant code]
+    // Start potentially redundant code
     // Checks to expand along direction robot is heading first
-    uint8_t testDir;
-    switch(h){
-      case 'u' : testDir = U; break;
-      case 'r' : testDir = R; break;
-      case 'd' : testDir = D; break;
-      case 'l' : testDir = L; break;
-      default  : testDir = R; break;
-    }
+    uint8_t testDir = heading2binary(h);
     if(is_open(*x,*y,h)){
       *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
       *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
@@ -414,22 +413,15 @@ uint8_t *expand(int *x,int *y, heading_t h){
   
 }
 
-uint8_t *expand_single(int *x,int *y,heading_t h){
+uint8_t* expand_single(int *x,int *y,heading_t h){
   if(*x<1||*x>9||*y<1||*y>9){
     return NULL;
   }
   uint8_t * r = NULL;//check_square(*x,*y);
   if(!is_intersection(*x,*y)){
-    // Start potentially redundant code]
+    // Start potentially redundant code
     // Checks to expand along direction robot is heading first
-    uint8_t testDir;
-    switch(h){
-      case 'u' : testDir = U; break;
-      case 'r' : testDir = R; break;
-      case 'd' : testDir = D; break;
-      case 'l' : testDir = L; break;
-      default  : testDir = R; break;
-    }
+    uint8_t testDir = heading2binary(h);
     if(is_open(*x,*y,h)){
       *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
       *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
@@ -450,6 +442,18 @@ uint8_t *expand_single(int *x,int *y,heading_t h){
     }
   }
   return r;
+}
+
+uint8_t heading2binary(heading_t h){
+  uint8_t ret;
+  switch(h){
+    case 'u' : ret = U; break;
+    case 'r' : ret = R; break;
+    case 'd' : ret = D; break;
+    case 'l' : ret = L; break;
+    default  : ret = 0b0000; break;
+  }
+  return(ret);
 }
 
 // test function only
