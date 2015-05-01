@@ -66,7 +66,8 @@ void broadcast_game(void);
 /*
  * Global Variables
  */
-const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
+ // Only need a single pipe due to one-way comms.
+const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
 
 game_state game;
@@ -91,28 +92,36 @@ void init_game() {
 
 void init_radio() {
   radio.begin();
-  radio.setRetries(15,15);
-  radio.openWritingPipe(pipes[1]);
-  radio.openReadingPipe(1,pipes[0]);
+  radio.setRetries(0,0);
+  radio.openWritingPipe(pipe);
   radio.setChannel(BROADCAST_CHANNEL);
-  radio.setDataRate(RF24_1MBPS);
+  radio.setDataRate(RF24_250KBPS);
   radio.setPALevel(RF24_PA_MAX);
-  
+  radio.setAutoAck(false);
   radio.stopListening();
 }
 
 // Used by Matlab connected arduino 
 void broadcast_game() {
   int i;
-
+  /*
   for (i = 0; i < GAME_SIZE; i++) {
-    //Serial.println(buf[i], DEC);
+    Serial.println(buf[i], DEC);
     Serial.print("Byte ");
     Serial.print(i);
     Serial.print(": ");
     Serial.println(((char *)g)[i], DEC);
   }
   Serial.println();
-  radio.write((char *)g,GAME_SIZE);
+  */
+  for (i = 0; i < GAME_SIZE; i++) {
+    ((char *)g)[i] += 1;
+    radio.write((char *)g,GAME_SIZE);  
+  }
+  /*if () {
+     Serial.println("TX: Success");
+  } else {
+      Serial.println("TX: FAILURE");
+  }*/
   //delay(10);	
 }
