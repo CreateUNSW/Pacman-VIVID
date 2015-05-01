@@ -88,7 +88,7 @@ Stepper m_bottomRight(STEPS_PER_REV,33,35,37,39);
  * Global Variables
  */
  
-static const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL};
+static const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
 static volatile int moveFlag = 0;
 
@@ -155,16 +155,18 @@ void setup() {
   Timer1.attachInterrupt( move_set );
   // put your setup code here, to run once:
   Serial.begin(9600);
-  //init_radio();
+  //pinMode(4,OUTPUT);
+  init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
   init_game(); 
 }
 
 void loop() {
-  /*
   // put your main code here, to run repeatedly:
-  update_game();
+    update_game();
+  
+  print_game();
   // If header is wrong, return to receive update again
   if (game.header != HEADER)
     return;
@@ -175,7 +177,6 @@ void loop() {
     case HIDE  : break; //Do something
     default    : break; //Do nothing 
   }
-  */
   /*Serial.print("Welcome player ");
   Serial.println(PLAYER_STRING);
   int i;
@@ -244,13 +245,11 @@ void print_game() {
 
 void init_radio() {
   radio.begin();
-  radio.setRetries(15,15);
-  radio.openWritingPipe(pipes[1]);
-  radio.openReadingPipe(1,pipes[0]);
+  radio.openReadingPipe(0,pipe);
   radio.setChannel(BROADCAST_CHANNEL);
-  radio.setDataRate(RF24_1MBPS);
-  radio.setPALevel(RF24_PA_MIN);
-  
+  radio.setDataRate(RF24_250KBPS);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.setAutoAck(false);
   radio.startListening();
 }
 // Initialises the game and waits for the host to send start command
@@ -260,22 +259,25 @@ void init_game() {
     case PACMAN : thisRobot = &game.pac; break;    
     default  : thisRobot = &game.g[playerSelect-1]; break;
   }
-  /*while (game.command != START) {
+  while (game.command != START) {
     //Serial.println(game.command);
-    print_game();
     update_game();
-    //delay(1000);
+    print_game();
+    //Serial.println("Will the game ever start?");
+    //delay(300);
   }
-  Serial.println("The game has begun!"); */
+  Serial.println("The game has begun!");
 }
 
 void update_game() {
   int i;
   if (radio.available()) {
     //Serial.println("Data available");
+    //digitalWrite(4,HIGH);
     radio.read((char *)&game,GAME_SIZE);
+  } else {
+    //digitalWrite(4,LOW);
   }
-  
 }
 
 uint8_t* check_square(int x,int y){
