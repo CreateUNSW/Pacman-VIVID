@@ -1,10 +1,12 @@
-#include <SPI.h>
-#include <Stepper.h>
-#include "RF24.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <TimerOne.h>
+#include <SPI.h>
+#include <Stepper.h>
+#include "RF24.h"
 /*
  * Game state definitions
  */ 
@@ -74,7 +76,7 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER_STRING "GHOST2"
 
 #define STEPS_PER_REV 200
-#define STEPPER_SPEED 100
+#define STEPPER_SPEED 300
 
 Stepper m_topLeft(STEPS_PER_REV,22,24,26,28);
 Stepper m_topRight(STEPS_PER_REV,23,25,27,29);
@@ -88,11 +90,13 @@ Stepper m_bottomRight(STEPS_PER_REV,33,35,37,39);
  
 static const uint64_t pipes[2] = { 0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL};
 RF24 radio(9,10);
+static volatile int moveFlag = 0;
 
 playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
+heading_t globalHeading = '0';
 
 game_state_t game;
 // Pointer to be used when updating game from radio
@@ -132,6 +136,8 @@ void print_game(void);
 void map_expand(void);
 bool is_intersection(int x, int y);
 bool is_open(int x, int y, heading_t dir);
+void move_set(void);
+void move_robot(void);
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t* expand(int *x,int *y, heading_t h);
@@ -139,11 +145,14 @@ uint8_t* expand_single(int *x,int *y,heading_t h);
 uint8_t heading2binary(heading_t h);
 void enter_robot_location(robot_t * entry);
 
+
 void setup() {
   m_topLeft.setSpeed(STEPPER_SPEED);
   m_topRight.setSpeed(STEPPER_SPEED);
   m_bottomLeft.setSpeed(STEPPER_SPEED);
   m_bottomRight.setSpeed(STEPPER_SPEED);
+  Timer1.initialize(10000);
+  Timer1.attachInterrupt( move_set );
   // put your setup code here, to run once:
   Serial.begin(9600);
   //init_radio();
@@ -167,17 +176,58 @@ void loop() {
     default    : break; //Do nothing 
   }
   */
-  Serial.print("Welcome player ");
+  /*Serial.print("Welcome player ");
   Serial.println(PLAYER_STRING);
   int i;
   for(i=0;i<NUM_GHOSTS;i++){
     Serial.print("Please enter ghost ");
     Serial.println(i+1);
     enter_robot_location(&game.g[i]);
+  }*/
+  if(Serial.available()){
+    globalHeading = Serial.read();
   }
-  map_expand();
+  //map_expand();
   //collision_detect();
+  if (moveFlag){
+    moveFlag = 0;
+    move_robot();
+  }
     
+}
+
+void move_set() {
+  moveFlag = 1;
+}
+
+void move_robot() {
+  switch(globalHeading){
+    case 'u' :
+      m_topLeft.step(1);
+      m_topRight.step(-1);
+      m_bottomLeft.step(1);
+      m_bottomRight.step(-1);
+      break;
+    case 'r' :
+      m_topLeft.step(1);
+      m_topRight.step(1);
+      m_bottomLeft.step(-1);
+      m_bottomRight.step(-1);
+      break;
+    case 'd' :
+      m_topLeft.step(-1);
+      m_topRight.step(1);
+      m_bottomLeft.step(-1);
+      m_bottomRight.step(1);
+      break;
+    case 'l' :
+      m_topLeft.step(-1);
+      m_topRight.step(-1);
+      m_bottomLeft.step(1);
+      m_bottomRight.step(1);
+      break;
+    default : break;
+  }    
 }
 
 void print_game() {
