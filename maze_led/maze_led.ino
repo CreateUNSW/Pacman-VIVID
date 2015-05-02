@@ -17,7 +17,19 @@ Adafruit_NeoPixel(TOTALLEDS, 9, NEO_GRB + NEO_KHZ800),
 Adafruit_NeoPixel(TOTALLEDS, 10, NEO_GRB + NEO_KHZ800)
 };
 
-int mapxy[9][9] = {1};
+//Adafruit_NeoPixel dots1 = Adafruit_NeoPixel(TOTALLEDS, 2, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel dots2 = Adafruit_NeoPixel(TOTALLEDS, 3, NEO_GRB + NEO_KHZ800);
+
+byte mapxy[9][9] =
+{{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
 void setup() {
    // initialise each strip, starting from D2
@@ -26,24 +38,37 @@ void setup() {
      //clears all leds
      dots[i].show(); 
    }
+   //dots1.begin();
+   //dots2.begin();
+   //dots1.show();
+   //dots2.show();
    //initialise map
    showMap();
 }
 
 void loop() {
   //if given a coordinate
-    
+  //int x, y;
+  //implement something here to get x/y    
+  //if ((x != -1)&&(y != -1)) {
+    //delay(1000);
+    //dots[1].setPixelColor(1, dots[1].Color(0,0,0));
+    //dots[1].show();
+  //}
 }
 
 //shows the initital 9 x 9 grid
 void showMap() {
   for (int i = 0; i < TOTALSTRIPS; i++) {
-    for (int j = 0; i < TOTALLEDS; j++) {
+    for (int j = 0; j < TOTALLEDS; j++) {
       if (j % SPACING == 0) {  
         dots[i].setPixelColor(j, dots[i].Color(50,50,50));
-        dots[i].show();
+        //dots1.setPixelColor(j, dots1.Color(250,50,50));        
+        //dots2.setPixelColor(j, dots2.Color(50,50,50));
       }
-      delay(20);
+      //dots1.show();
+      //dots2.show();
+      dots[i].show();
     }
   }  
 }
