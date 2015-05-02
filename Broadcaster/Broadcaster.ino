@@ -69,7 +69,7 @@ void broadcast_game(void);
  // Only need a single pipe due to one-way comms.
 const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
-
+int time;
 game_state game;
 // Pointer to be used when updating game from radio
 game_state *g = &game;
@@ -114,8 +114,12 @@ void broadcast_game() {
   }
   Serial.println();
   */
-  for (i = 0; i < GAME_SIZE; i++) {
+  // This increment loop avoids modifying the checksum
+  for (i = 1; i < GAME_SIZE; i++) {
     ((char *)g)[i] += 1;
+    time = millis();
+    set_checksum();
+    Serial.println(millis()- time);
     radio.write((char *)g,GAME_SIZE);  
   }
   /*if () {
@@ -123,5 +127,24 @@ void broadcast_game() {
   } else {
       Serial.println("TX: FAILURE");
   }*/
-  //delay(10);	
+}
+
+// A simple checksum calculator, operates within 1ms
+void set_checksum(void) {
+  uint8_t   i, j, sum = 0;
+  // Don't include checksum
+  for (i = 1; i < GAME_SIZE; i++) {
+    for (j = 0; j < 8; j++) {
+      sum += ((char *)g)[i] & (1 << j) >> j;
+      /*Serial.print("i:");
+      Serial.print(i);
+      Serial.print(" j:");
+      Serial.print(j);
+      Serial.print(" sum:");
+      Serial.println(sum);
+     */ 
+    }
+  }
+  g->header = sum;
+  
 }
