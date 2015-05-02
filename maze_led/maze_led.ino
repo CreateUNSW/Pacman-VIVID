@@ -69,6 +69,7 @@ void showMap() {
       //dots1.show();
       //dots2.show();
       dots[i].show();
+      delay(1);
     }
   }  
 }
