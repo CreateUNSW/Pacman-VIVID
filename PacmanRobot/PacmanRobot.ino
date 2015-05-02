@@ -100,7 +100,7 @@ heading_t globalHeading = '0';
 
 game_state_t game;
 // Pointer to be used when updating game from radio
-//game_state_t *g = &game;
+game_state_t *g = &game;
 
 // note: for error checking, we will refer to board with indices 1-9 not 0-8
 // exit of "ghost cave" has been made one directional, could change easily for
@@ -164,12 +164,16 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-    update_game();
+  update_game();
   
-  print_game();
   // If header is wrong, return to receive update again
-  if (game.header != HEADER)
+  if (game.header != checksum()) {
+    Serial.println("ERR: Checksum invalid");
+    print_game();
     return;
+  } else {
+    Serial.println("Checksum passed");
+  }
   switch(game.command) {
     case STOP  : break; //Do something
     case PAUSE : break; //Do something
@@ -533,6 +537,13 @@ void enter_robot_location(robot_t * entry){
 }
 
     
-  
-
+uint8_t checksum() {
+  uint8_t i, j, sum = 0;
+  for (i = 1; i < GAME_SIZE; i++) {
+     for (j = 0; j < 8; j++) {
+        sum += ((char *)g)[i] & (1 << j) >> j;
+     }
+  }
+  return sum;
+}
 
