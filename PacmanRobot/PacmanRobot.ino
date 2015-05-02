@@ -266,6 +266,10 @@ void init_game() {
   while (game.command != START) {
     //Serial.println(game.command);
     update_game();
+    // Don't trust start command with faulty checksum
+    if (game.header != checksum()) {
+       game.command == STOP; 
+    }
     print_game();
     //Serial.println("Will the game ever start?");
     //delay(300);
