@@ -5,7 +5,8 @@
 
 #include <TimerOne.h>
 #include <SPI.h>
-#include <Stepper.h>
+//#include <AccelStepper.h>
+#include <VividStepper.h>
 #include "RF24.h"
 /*
  * Game state definitions
@@ -75,14 +76,18 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER GHOST2
 #define PLAYER_STRING "GHOST2"
 
-#define STEPS_PER_REV 200
-#define STEPPER_SPEED 300
+#define STEPPER_SPEED 800
+#define STEPPER_MAX_SPEED 1000
 
-Stepper m_topLeft(STEPS_PER_REV,22,24,26,28);
-Stepper m_topRight(STEPS_PER_REV,23,25,27,29);
-Stepper m_bottomLeft(STEPS_PER_REV,32,34,36,38);
-Stepper m_bottomRight(STEPS_PER_REV,33,35,37,39);
-  
+/*AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,true);
+AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,true);
+AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,true);
+AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,true);*/
+VividStepper m_topLeft(VividStepper::HALF,22,24,26,28);
+VividStepper m_topRight(VividStepper::HALF,23,25,27,29);
+VividStepper m_bottomLeft(VividStepper::HALF,32,34,36,38);
+VividStepper m_bottomRight(VividStepper::HALF,33,35,37,39);
+
 
 /*
  * Global Variables
@@ -97,6 +102,7 @@ robot_t *thisRobot;
 uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading = '0';
+heading_t currentHeading = '0';
 
 game_state_t game;
 // Pointer to be used when updating game from radio
@@ -147,27 +153,27 @@ void enter_robot_location(robot_t * entry);
 
 
 void setup() {
-  m_topLeft.setSpeed(STEPPER_SPEED);
-  m_topRight.setSpeed(STEPPER_SPEED);
-  m_bottomLeft.setSpeed(STEPPER_SPEED);
-  m_bottomRight.setSpeed(STEPPER_SPEED);
-  Timer1.initialize(10000);
+  /*m_topLeft.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);*/
+  Timer1.initialize(50);
   Timer1.attachInterrupt( move_set );
   // put your setup code here, to run once:
   Serial.begin(9600);
   //pinMode(4,OUTPUT);
-  init_radio();
+  //init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
-  init_game(); 
+  //init_game(); 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  update_game();
+  //update_game();
   
   // If header is wrong, return to receive update again
-  if (game.header != checksum()) {
+  /*if (game.header != checksum()) {
     Serial.println("ERR: Checksum invalid");
     print_game();
     return;
@@ -180,7 +186,7 @@ void loop() {
     case RESUME: break; //Do something
     case HIDE  : break; //Do something
     default    : break; //Do nothing 
-  }
+  }*/
   /*Serial.print("Welcome player ");
   Serial.println(PLAYER_STRING);
   int i;
@@ -206,33 +212,45 @@ void move_set() {
 }
 
 void move_robot() {
-  switch(globalHeading){
-    case 'u' :
-      m_topLeft.step(1);
-      m_topRight.step(-1);
-      m_bottomLeft.step(1);
-      m_bottomRight.step(-1);
-      break;
-    case 'r' :
-      m_topLeft.step(1);
-      m_topRight.step(1);
-      m_bottomLeft.step(-1);
-      m_bottomRight.step(-1);
-      break;
-    case 'd' :
-      m_topLeft.step(-1);
-      m_topRight.step(1);
-      m_bottomLeft.step(-1);
-      m_bottomRight.step(1);
-      break;
-    case 'l' :
-      m_topLeft.step(-1);
-      m_topRight.step(-1);
-      m_bottomLeft.step(1);
-      m_bottomRight.step(1);
-      break;
-    default : break;
-  }    
+  if(globalHeading!=currentHeading){
+    /*switch(globalHeading){
+      case 'u' :
+        m_topLeft.setSpeed(STEPPER_SPEED);
+        m_topRight.setSpeed(-STEPPER_SPEED);
+        m_bottomLeft.setSpeed(STEPPER_SPEED);
+        m_bottomRight.setSpeed(-STEPPER_SPEED);
+        break;
+      case 'r' :
+        m_topLeft.setSpeed(STEPPER_SPEED);
+        m_topRight.setSpeed(STEPPER_SPEED);
+        m_bottomLeft.setSpeed(-STEPPER_SPEED);
+        m_bottomRight.setSpeed(-STEPPER_SPEED);
+        break;
+      case 'd' :
+        m_topLeft.setSpeed(-STEPPER_SPEED);
+        m_topRight.setSpeed(STEPPER_SPEED);
+        m_bottomLeft.setSpeed(-STEPPER_SPEED);
+        m_bottomRight.setSpeed(STEPPER_SPEED);
+        break;
+      case 'l' :
+        m_topLeft.setSpeed(-STEPPER_SPEED);
+        m_topRight.setSpeed(-STEPPER_SPEED);
+        m_bottomLeft.setSpeed(STEPPER_SPEED);
+        m_bottomRight.setSpeed(STEPPER_SPEED);
+        break;
+      default : 
+        m_topLeft.setSpeed(0);
+        m_topRight.setSpeed(0);
+        m_bottomLeft.setSpeed(0);
+        m_bottomRight.setSpeed(0);
+        break;
+    }*/
+    currentHeading = globalHeading;
+  }
+  /*m_topLeft.runSpeed();
+  m_topRight.runSpeed();
+  m_bottomLeft.runSpeed();
+  m_bottomRight.runSpeed();*/
 }
 
 void print_game() {
