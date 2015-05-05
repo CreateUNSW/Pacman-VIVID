@@ -46,20 +46,20 @@
  * Game Struct definitions
  */
 
-typedef struct _position_t{
+typedef struct {
     uint8_t x : 4;
     uint8_t y : 4;
 } position_t;
 
 typedef char heading_t;
 
-typedef struct _robot_t{
+typedef struct {
     position_t p;
     heading_t h;
 } robot_t;
 
 // Contains information about all robots currently in play.
-typedef struct _game_state_t{
+typedef struct {
     uint8_t header;
     uint8_t command;	
     robot_t pac;
@@ -76,17 +76,13 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER GHOST2
 #define PLAYER_STRING "GHOST2"
 
-#define STEPPER_SPEED 800
-#define STEPPER_MAX_SPEED 1000
+#define STEPPER_SPEED 400
+#define STEPPER_MODE VividStepper::HALF
 
-/*AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,28,26,true);
-AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,29,27,true);
-AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,38,36,true);
-AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,39,37,true);*/
-VividStepper m_topLeft(VividStepper::HALF,22,24,28,26);
-VividStepper m_topRight(VividStepper::HALF,23,25,29,27);
-VividStepper m_bottomLeft(VividStepper::HALF,32,34,38,36);
-VividStepper m_bottomRight(VividStepper::HALF,33,35,39,37);
+VividStepper m_topLeft(STEPPER_MODE,22,24,28,26);
+VividStepper m_topRight(STEPPER_MODE,23,25,29,27);
+VividStepper m_bottomLeft(STEPPER_MODE,32,34,38,36);
+VividStepper m_bottomRight(STEPPER_MODE,33,35,39,37);
 
 
 /*
@@ -95,14 +91,12 @@ VividStepper m_bottomRight(VividStepper::HALF,33,35,39,37);
  
 static const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
-static volatile int moveFlag = 0;
 
 playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading = '0';
-heading_t currentHeading = '0';
 
 game_state_t game;
 // Pointer to be used when updating game from radio
@@ -142,7 +136,8 @@ void print_game(void);
 void map_expand(void);
 bool is_intersection(int x, int y);
 bool is_open(int x, int y, heading_t dir);
-void move_set(void);
+bool collision_detect(heading_t h);
+void decide_direction(uint8_t options);
 void move_robot(void);
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
@@ -153,11 +148,7 @@ void enter_robot_location(robot_t * entry);
 
 
 void setup() {
-  /*m_topLeft.setMaxSpeed(STEPPER_MAX_SPEED);
-  m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
-  m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
-  m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);*/
-  Timer1.initialize(2000);
+  Timer1.initialize(1000000/STEPPER_SPEED*2/STEPPER_MODE);
   Timer1.attachInterrupt( move_robot );
   // put your setup code here, to run once:
   Serial.begin(9600);
@@ -195,47 +186,36 @@ void loop() {
     Serial.println(i+1);
     enter_robot_location(&game.g[i]);
   }*/
-  if(Serial.available()){
-    globalHeading = Serial.read();
-  }
   //map_expand();
   //collision_detect();
-  if (moveFlag){
-    moveFlag = 0;
-    move_robot();
-  }
     
-}
-
-void move_set() {
-  moveFlag = 1;
 }
 
 void move_robot() {
   switch(globalHeading){
     case 'u' :
       m_topLeft.step(CW);
-      //m_topRight.step(CCW);
-      //m_bottomLeft.step(CW);
-      //m_bottomRight.step(CCW);
+      m_topRight.step(CCW);
+      m_bottomLeft.step(CW);
+      m_bottomRight.step(CCW);
       break;
     case 'r' :
       m_topLeft.step(CW);
-      //m_topRight.step(CW);
-      //m_bottomLeft.step(CCW);
-      //m_bottomRight.step(CCW);
+      m_topRight.step(CW);
+      m_bottomLeft.step(CCW);
+      m_bottomRight.step(CCW);
       break;
     case 'd' :
       m_topLeft.step(CCW);
-      //m_topRight.step(CW);
-      //m_bottomLeft.step(CCW);
-      //m_bottomRight.step(CW);
+      m_topRight.step(CW);
+      m_bottomLeft.step(CCW);
+      m_bottomRight.step(CW);
       break;
     case 'l' :
       m_topLeft.step(CCW);
-      //m_topRight.step(CCW);
-      //m_bottomLeft.step(CW);
-      //m_bottomRight.step(CW);
+      m_topRight.step(CCW);
+      m_bottomLeft.step(CW);
+      m_bottomRight.step(CW);
       break;
     default : 
       m_topLeft.off();
@@ -244,10 +224,6 @@ void move_robot() {
       m_bottomRight.off();
       break;
   }
-  /*m_topLeft.runSpeed();
-  m_topRight.runSpeed();
-  m_bottomLeft.runSpeed();
-  m_bottomRight.runSpeed();*/
 }
 
 void print_game() {
@@ -344,12 +320,11 @@ bool is_open(int x, int y, heading_t dir){
   return ((square&testDir)>0);
 }
 
-bool collision_detect(){
+bool collision_detect(heading_t h){
   robot_t *r;
   bool collision = false;
   int xDest = thisRobot->p.x;
   int yDest = thisRobot->p.y;
-  heading_t h = thisRobot->h;
   if (is_intersection(xDest,yDest)){
     uint8_t testDir = heading2binary(h);
     // force look at the next intersection
@@ -398,21 +373,85 @@ bool collision_detect(){
   }
   return collision;
 }
+
+void decide_direction(uint8_t options){
+  heading_t newHeading;
+  heading_t directionList[4];
+  uint8_t directionInts[4];
+  float angle;
+  if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
+    switch(thisRobot->h){
+      case 'u':
+        angle = 90;
+        break;
+      case 'r':
+        angle = 0;
+        break;
+      case 'd':
+        angle = -90;
+        break;
+      case 'l':
+        angle = 180;
+        break;
+      default :
+        angle = 90;
+        break;
+    }
+  } else {
+    angle = atan2(thisRobot->p.y-goal.y,goal.x-thisRobot->p.x);
+  } 
+  if (angle>=135){
+    strncpy(directionList,"ludr",4);
+  } else if(angle>=90){
+    strncpy(directionList,"ulrd",4);
+  } else if(angle>=45){
+    strncpy(directionList,"urld",4);
+  } else if(angle>=0){
+    strncpy(directionList,"rudl",4);
+  } else if(angle>=-45){
+    strncpy(directionList,"rdul",4);
+  } else if(angle>=-90){
+    strncpy(directionList,"drlu",4);
+  } else if(angle>=-135){
+    strncpy(directionList,"dlru",4);
+  } else if(angle>=-180){
+    strncpy(directionList,"ldur",4);;
+  } else { // default probably not needed
+    strncpy(directionList,"urdl",4);
+  }
+  int i;
+  for(i=0;i<4;i++){
+    directionInts[i] = heading2binary(directionList[i]);
+  }
+  i=0;
+  while(i<4){
+    if((options&directionInts[i])>0){
+      break;
+    }
+    i++;
+  }
+  if(i==4){
+    newHeading = '0';
+  } else {
+    newHeading = directionList[i];
+  }  
+}
   
 void map_expand(){
   int x = thisRobot->p.x;
   int y = thisRobot->p.y;
   char h = thisRobot->h;
   uint8_t *r;
+  uint8_t options = 0b0000;
   int tempX, tempY;
   // expands along 
   if(is_open(x,y,'u')&&h!='d'){
     tempX = x; tempY = y-1;
     r = expand(&tempX,&tempY,'u');
     if(r==NULL) {
-      thisRobot->h = 'u';
-      if(!collision_detect()){
+      if(!collision_detect('u')){
         Serial.println("Up path available");
+        options|=U;
       }
     }
   }
@@ -420,9 +459,9 @@ void map_expand(){
     tempX = x+1; tempY = y;
     r = expand(&tempX,&tempY,'r');
     if(r==NULL) {
-      thisRobot->h = 'r';
-      if(!collision_detect()){
+      if(!collision_detect('r')){
         Serial.println("Right path available");
+        options|=R;
       }
     }
   }
@@ -430,9 +469,9 @@ void map_expand(){
     tempX = x; tempY = y+1;
     r = expand(&tempX,&tempY,'d');
     if(r==NULL) {
-      thisRobot->h = 'd';
-      if(!collision_detect()){
+      if(!collision_detect('d')){
         Serial.println("Down path available");
+        options|=D;
       }
     }
   }
@@ -440,9 +479,9 @@ void map_expand(){
     tempX = x-1; tempY = y;
     r = expand(&tempX,&tempY,'l');
     if(r==NULL) {
-      thisRobot->h = 'l';
-      if(!collision_detect()){
+      if(!collision_detect('l')){
         Serial.println("Left path available");
+        options|=L;
       }
     }
   }
