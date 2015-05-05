@@ -79,14 +79,14 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define STEPPER_SPEED 800
 #define STEPPER_MAX_SPEED 1000
 
-/*AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,true);
-AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,true);
-AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,true);
-AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,true);*/
-VividStepper m_topLeft(VividStepper::HALF,22,24,26,28);
-VividStepper m_topRight(VividStepper::HALF,23,25,27,29);
-VividStepper m_bottomLeft(VividStepper::HALF,32,34,36,38);
-VividStepper m_bottomRight(VividStepper::HALF,33,35,37,39);
+/*AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,28,26,true);
+AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,29,27,true);
+AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,38,36,true);
+AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,39,37,true);*/
+VividStepper m_topLeft(VividStepper::HALF,22,24,28,26);
+VividStepper m_topRight(VividStepper::HALF,23,25,29,27);
+VividStepper m_bottomLeft(VividStepper::HALF,32,34,38,36);
+VividStepper m_bottomRight(VividStepper::HALF,33,35,39,37);
 
 
 /*
@@ -157,8 +157,8 @@ void setup() {
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);*/
-  Timer1.initialize(50);
-  Timer1.attachInterrupt( move_set );
+  Timer1.initialize(2000);
+  Timer1.attachInterrupt( move_robot );
   // put your setup code here, to run once:
   Serial.begin(9600);
   //pinMode(4,OUTPUT);
@@ -212,40 +212,37 @@ void move_set() {
 }
 
 void move_robot() {
-  if(globalHeading!=currentHeading){
-    /*switch(globalHeading){
-      case 'u' :
-        m_topLeft.setSpeed(STEPPER_SPEED);
-        m_topRight.setSpeed(-STEPPER_SPEED);
-        m_bottomLeft.setSpeed(STEPPER_SPEED);
-        m_bottomRight.setSpeed(-STEPPER_SPEED);
-        break;
-      case 'r' :
-        m_topLeft.setSpeed(STEPPER_SPEED);
-        m_topRight.setSpeed(STEPPER_SPEED);
-        m_bottomLeft.setSpeed(-STEPPER_SPEED);
-        m_bottomRight.setSpeed(-STEPPER_SPEED);
-        break;
-      case 'd' :
-        m_topLeft.setSpeed(-STEPPER_SPEED);
-        m_topRight.setSpeed(STEPPER_SPEED);
-        m_bottomLeft.setSpeed(-STEPPER_SPEED);
-        m_bottomRight.setSpeed(STEPPER_SPEED);
-        break;
-      case 'l' :
-        m_topLeft.setSpeed(-STEPPER_SPEED);
-        m_topRight.setSpeed(-STEPPER_SPEED);
-        m_bottomLeft.setSpeed(STEPPER_SPEED);
-        m_bottomRight.setSpeed(STEPPER_SPEED);
-        break;
-      default : 
-        m_topLeft.setSpeed(0);
-        m_topRight.setSpeed(0);
-        m_bottomLeft.setSpeed(0);
-        m_bottomRight.setSpeed(0);
-        break;
-    }*/
-    currentHeading = globalHeading;
+  switch(globalHeading){
+    case 'u' :
+      m_topLeft.step(CW);
+      //m_topRight.step(CCW);
+      //m_bottomLeft.step(CW);
+      //m_bottomRight.step(CCW);
+      break;
+    case 'r' :
+      m_topLeft.step(CW);
+      //m_topRight.step(CW);
+      //m_bottomLeft.step(CCW);
+      //m_bottomRight.step(CCW);
+      break;
+    case 'd' :
+      m_topLeft.step(CCW);
+      //m_topRight.step(CW);
+      //m_bottomLeft.step(CCW);
+      //m_bottomRight.step(CW);
+      break;
+    case 'l' :
+      m_topLeft.step(CCW);
+      //m_topRight.step(CCW);
+      //m_bottomLeft.step(CW);
+      //m_bottomRight.step(CW);
+      break;
+    default : 
+      m_topLeft.off();
+      m_topRight.off();
+      m_bottomLeft.off();
+      m_bottomRight.off();
+      break;
   }
   /*m_topLeft.runSpeed();
   m_topRight.runSpeed();
