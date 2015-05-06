@@ -5,9 +5,17 @@
 
 #include <TimerOne.h>
 #include <SPI.h>
-//#include <AccelStepper.h>
-#include <VividStepper.h>
+#include <AccelStepper.h>
 #include "RF24.h"
+
+/* note: data types and variables have been grouped together for ease of reading.
+   This leads to inefficient allocation of memory space, but for now we have plenty.
+   Once program is working, suggest moving relevant sections into different .h and .c
+   files, as well as converting as much code as possible to c++ rather than c.
+   
+   For now, don't move around things.
+*/
+
 /*
  * Game state definitions
  */ 
@@ -36,11 +44,33 @@
 #define D 0b0010
 #define L 0b0001
 
+// note: for error checking, we will refer to board with indices 1-9 not 0-8
+// exit of "ghost cave" has been made one directional, could change easily for
+// end of game or hiding mode (at x(column)=5,y(row)=4, R|L->R|D|L
+static const uint8_t game_map[DIM][DIM] = {
+  {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
+  {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
+  {U|R,   U|D|L,  U|R,    D|L,    0,     R|D,    U|L,    U|R|D,  U|L},
+  {0,     U|D,    R|D,    U|R|L,  R|L,   U|R|L,  D|L,    U|D,    0  },
+  {R|D,   U|R|D|L,U|D|L,  R,      U|R|L, L,      U|R|D,  U|R|D|L,D|L},
+  {U|D,   U|D,    U|R,    R|D|L,  R|L,   R|D|L,  U|L,    U|D,    U|D},
+  {U|R,   U|D|L,  R|D,    U|R|D|L,R|L,   U|R|D|L,D|L,    U|R|D,  U|L},
+  {R|D,   U|R|L,  U|L,    U|D,    0,     U|D,    U|R,    U|R|L,  D|L},
+  {U|R,   R|L,    R|L,    U|R|L,  R|L,   U|R|L,  R|L,    R|L,    U|L}
+};
+
+//Variables for smart map expansion
+static const uint8_t subDir = 0b1001;
+static const uint8_t addDir = 0b0110;
+static const uint8_t xx = 0b0101;
+static const uint8_t yy = 0b1010;
+
 /*
  * Radio definitions
  */
 
 #define BROADCAST_CHANNEL 72
+static const uint64_t pipe = 0xF0F0F0F0E1LL;
 
 /*
  * Game Struct definitions
@@ -66,6 +96,67 @@ typedef struct {
     robot_t g[NUM_GHOSTS];
 } game_state_t;
 
+/*
+ * Line sensor class and functions.
+ * Yay fun c++ code.
+ */
+
+typedef enum {LEFT,CENTRE,RIGHT,NONE} line_pos_t;
+
+class LineSensor 
+{
+public:
+  LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4);
+  line_pos_t get_line();
+private:
+  uint8_t _pins[4];
+};
+
+LineSensor::LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4){
+  _pins[0] = pin1; _pins[1] = pin2; _pins[2] = pin3; _pins[3] = pin4;
+  int i;
+  for(i=0;i<4;i++){
+    pinMode(_pins[i],INPUT);
+  }
+}
+
+line_pos_t LineSensor::get_line(){
+  int curLine[4];
+  int tripCount=0, sum=0, i=0;
+  for(;i<4;i++){
+    curLine[i] = (int)digitalRead(_pins[i]);
+    tripCount += curLine[i];
+    curLine[i]*=(2*i-3);
+    sum += curLine[i];
+  }
+  if(tripCount==0){
+    return NONE;
+  } else if(sum<0){
+    return LEFT;
+  } else if(sum>0){
+    return RIGHT;
+  } else {
+    return CENTRE;
+  }
+}
+
+/*
+ * Hardware definitions
+ */
+
+AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,true);
+AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,true);
+AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,true);
+AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,true);
+
+LineSensor lineTop(2,3,4,5);
+LineSensor lineRight(6,7,8,9);
+LineSensor lineBottom(42,44,46,48);
+LineSensor lineLeft(43,45,47,49);
+
+RF24 radio(10,11);
+
+// to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
 
 /*
  * Local definitions
@@ -75,26 +166,19 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 // keep these consistent please
 #define PLAYER GHOST2
 #define PLAYER_STRING "GHOST2"
+// will make this selectable via user interface on robot
 
-#define STEPPER_SPEED 400
-#define STEPPER_MODE VividStepper::HALF
-
-VividStepper m_topLeft(STEPPER_MODE,22,24,28,26);
-VividStepper m_topRight(STEPPER_MODE,23,25,29,27);
-VividStepper m_bottomLeft(STEPPER_MODE,32,34,38,36);
-VividStepper m_bottomRight(STEPPER_MODE,33,35,39,37);
+#define STEPPER_SPEED 800
+#define STEPPER_MAX_SPEED 1000
 
 
 /*
  * Global Variables
  */
  
-static const uint64_t pipe = 0xF0F0F0F0E1LL;
-RF24 radio(9,10);
-
 playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
-uint16_t robotSpeed = STEPPER_SPEED;
+//uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading = '0';
 
@@ -102,33 +186,13 @@ game_state_t game;
 // Pointer to be used when updating game from radio
 game_state_t *g = &game;
 
-// note: for error checking, we will refer to board with indices 1-9 not 0-8
-// exit of "ghost cave" has been made one directional, could change easily for
-// end of game or hiding mode (at x(column)=5,y(row)=4, R|L->R|D|L
-const uint8_t game_map[DIM][DIM] = {
-  {R|D,   R|D|L,  R|L,    D|L,    0,     R|D,    R|L,    R|D|L,  D|L},
-  {U|D,   U|R|D,  R|D|L,  U|R|L,  R|L,   U|R|L,  R|D|L,  U|D|L,  U|D},
-  {U|R,   U|D|L,  U|R,    D|L,    0,     R|D,    U|L,    U|R|D,  U|L},
-  {0,     U|D,    R|D,    U|R|L,  R|L,   U|R|L,  D|L,    U|D,    0  },
-  {R|D,   U|R|D|L,U|D|L,  R,      U|R|L, L,      U|R|D,  U|R|D|L,D|L},
-  {U|D,   U|D,    U|R,    R|D|L,  R|L,   R|D|L,  U|L,    U|D,    U|D},
-  {U|R,   U|D|L,  R|D,    U|R|D|L,R|L,   U|R|D|L,D|L,    U|R|D,  U|L},
-  {R|D,   U|R|L,  U|L,    U|D,    0,     U|D,    U|R,    U|R|L,  D|L},
-  {U|R,   R|L,    R|L,    U|R|L,  R|L,   U|R|L,  R|L,    R|L,    U|L}
-};
-
-//Variables for smart map expansion
-const uint8_t subDir = 0b1001;
-const uint8_t addDir = 0b0110;
-const uint8_t xx = 0b0101;
-const uint8_t yy = 0b1010;
-
 
 /*
  * Functions to be used by robots and hub
  */
 
 void init_radio(void);
+void init_motors(void);
 void init_game(void);
 void update_game(void);
 void init_game_map(void);
@@ -146,18 +210,63 @@ uint8_t* expand_single(int *x,int *y,heading_t h);
 uint8_t heading2binary(heading_t h);
 void enter_robot_location(robot_t * entry);
 
+/**    SET UP   **/
+
+void init_radio() {
+  radio.begin();
+  radio.openReadingPipe(0,pipe);
+  radio.setChannel(BROADCAST_CHANNEL);
+  radio.setDataRate(RF24_250KBPS);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.setAutoAck(false);
+  radio.startListening();
+}
+
+void init_motors() {
+  m_topLeft.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
+  Timer1.attachInterrupt( move_robot );  // interrupt calls motion directly, setting flag
+                                         // is alternate option
+  
+}
+
+
+// Initialises the game and waits for the host to send start command
+void init_game() {
+  // To be replaced with LCD display and button toggling!
+  switch(playerSelect){
+    case PACMAN : thisRobot = &game.pac; break;    
+    default  : thisRobot = &game.g[playerSelect-1]; break;
+  }
+  while (game.command != START) {
+    //Serial.println(game.command);
+    update_game();
+    // Don't trust start command with faulty checksum
+    if (game.header != checksum()) {
+       game.command == STOP; 
+    }
+    print_game();
+    //Serial.println("Will the game ever start?");
+    //delay(300);
+  }
+  Serial.println("The game has begun!");
+}
 
 void setup() {
-  Timer1.initialize(1000000/STEPPER_SPEED*2/STEPPER_MODE);
-  Timer1.attachInterrupt( move_robot );
   // put your setup code here, to run once:
   Serial.begin(9600);
+  init_motors();
   //pinMode(4,OUTPUT);
   //init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game(); 
 }
+
+/**    MAIN FUNCTIONS    **/
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -191,41 +300,6 @@ void loop() {
     
 }
 
-void move_robot() {
-  switch(globalHeading){
-    case 'u' :
-      m_topLeft.step(CW);
-      m_topRight.step(CCW);
-      m_bottomLeft.step(CW);
-      m_bottomRight.step(CCW);
-      break;
-    case 'r' :
-      m_topLeft.step(CW);
-      m_topRight.step(CW);
-      m_bottomLeft.step(CCW);
-      m_bottomRight.step(CCW);
-      break;
-    case 'd' :
-      m_topLeft.step(CCW);
-      m_topRight.step(CW);
-      m_bottomLeft.step(CCW);
-      m_bottomRight.step(CW);
-      break;
-    case 'l' :
-      m_topLeft.step(CCW);
-      m_topRight.step(CCW);
-      m_bottomLeft.step(CW);
-      m_bottomRight.step(CW);
-      break;
-    default : 
-      m_topLeft.off();
-      m_topRight.off();
-      m_bottomLeft.off();
-      m_bottomRight.off();
-      break;
-  }
-}
-
 void print_game() {
    int i;
    for (i = 0; i < GAME_SIZE; i++) {
@@ -238,35 +312,7 @@ void print_game() {
    Serial.println();Serial.println();
 }
 
-void init_radio() {
-  radio.begin();
-  radio.openReadingPipe(0,pipe);
-  radio.setChannel(BROADCAST_CHANNEL);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_MAX);
-  radio.setAutoAck(false);
-  radio.startListening();
-}
-// Initialises the game and waits for the host to send start command
-void init_game() {
-  // To be replaced with LCD display and button toggling!
-  switch(playerSelect){
-    case PACMAN : thisRobot = &game.pac; break;    
-    default  : thisRobot = &game.g[playerSelect-1]; break;
-  }
-  while (game.command != START) {
-    //Serial.println(game.command);
-    update_game();
-    // Don't trust start command with faulty checksum
-    if (game.header != checksum()) {
-       game.command == STOP; 
-    }
-    print_game();
-    //Serial.println("Will the game ever start?");
-    //delay(300);
-  }
-  Serial.println("The game has begun!");
-}
+/**    RADIO NETWORK FUNCTIONS    **/
 
 void update_game() {
   int i;
@@ -278,6 +324,91 @@ void update_game() {
     //digitalWrite(4,LOW);
   }
 }
+
+uint8_t checksum() {
+  uint8_t i, j, sum = 0;
+  for (i = 1; i < GAME_SIZE; i++) {
+     for (j = 0; j < 8; j++) {
+        sum += ((char *)g)[i] & (1 << j) >> j;
+     }
+  }
+  return sum;
+}
+
+/**    MOVEMENT FUNCTIONS    **/
+
+bool detect_intersection() {
+  // returning true when robot has just reached an intersection
+  // (to be completed)
+  return true;
+}
+
+
+void move_robot() {
+  // use of pointers helps translate robot movement functions based on direction
+  AccelStepper *m_frontLeft;
+  AccelStepper *m_frontRight;
+  AccelStepper *m_backLeft;
+  AccelStepper *m_backRight;
+  LineSensor *lineFront;
+  LineSensor *lineBack;
+  uint8_t directions[4];
+  switch(globalHeading){
+    case 'u' :
+      m_frontLeft = &m_topLeft;
+      m_frontRight = &m_topRight;
+      m_backLeft = &m_bottomLeft;
+      m_backRight = &m_bottomRight;
+      lineFront = &lineTop;
+      lineBack = &lineBottom;
+      break;
+    case 'r' :
+      m_frontLeft = &m_topRight;
+      m_frontRight = &m_bottomRight;
+      m_backLeft = &m_topLeft;
+      m_backRight = &m_bottomLeft;
+      lineFront = &lineRight;
+      lineBack = &lineLeft;
+      break;
+    case 'd' :
+      //uint8_t temp = {
+      m_frontLeft = &m_bottomRight;
+      m_frontRight = &m_bottomLeft;
+      m_backLeft = &m_topRight;
+      m_backRight = &m_topLeft;
+      lineFront = &lineBottom;
+      lineBack = &lineTop;
+      break;
+    case 'l' :
+      m_frontLeft = &m_bottomLeft;
+      m_frontRight = &m_topLeft;
+      m_backLeft = &m_bottomRight;
+      m_backRight = &m_topRight;
+      lineFront = &lineLeft;
+      lineBack = &lineRight;
+      break;
+    default : 
+      m_topLeft.setSpeed(0);
+      m_topRight.setSpeed(0);
+      m_bottomLeft.setSpeed(0);
+      m_bottomRight.setSpeed(0);
+      return; //exit here
+      break;
+  }
+  // Will need to set speed based on relative line positioning.
+  // Need to investigate whether rapid polling of set speed causes problems.
+  m_frontLeft->setSpeed(STEPPER_SPEED);
+  m_frontRight->setSpeed(-STEPPER_SPEED);
+  m_backLeft->setSpeed(STEPPER_SPEED);
+  m_backRight->setSpeed(-STEPPER_SPEED);
+  
+  m_frontLeft->runSpeed();
+  m_frontRight->runSpeed();
+  m_backLeft->runSpeed();
+  m_backRight->runSpeed();
+}
+
+/**    MAP NAVIGATION FUNCTIONS    **/
 
 uint8_t* check_square(int x,int y){
   robot_t *r = NULL;
@@ -379,6 +510,8 @@ void decide_direction(uint8_t options){
   heading_t directionList[4];
   uint8_t directionInts[4];
   float angle;
+  if(goal.x==0&&goal.y==0){ //random movement mode
+  }
   if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
     switch(thisRobot->h){
       case 'u':
@@ -485,6 +618,7 @@ void map_expand(){
       }
     }
   }
+  decide_direction(options);
 }
 
 uint8_t* expand(int *x,int *y, heading_t h){
@@ -593,15 +727,3 @@ void enter_robot_location(robot_t * entry){
   entry->p.y = y;
   entry->h = h;
 }
-
-    
-uint8_t checksum() {
-  uint8_t i, j, sum = 0;
-  for (i = 1; i < GAME_SIZE; i++) {
-     for (j = 0; j < 8; j++) {
-        sum += ((char *)g)[i] & (1 << j) >> j;
-     }
-  }
-  return sum;
-}
-
