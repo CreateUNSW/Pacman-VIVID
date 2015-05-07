@@ -1,0 +1,19 @@
+player.setPlayMode(PM);
+	PM_NORMAL_PLAY
+	PM_SHUFFLE_PLAY
+	PM_REPEAT_LIST
+	PM_REPEAT_ONE
+
+	
+player.deleteSong();
+player.playOne();
+player.play();
+
+
+playingState
+can't seem to call this variable
+playingState = PS_Post_PLAY;
+Line 93
+add the following after:
+digitalWrite(11, HIGH);
+
