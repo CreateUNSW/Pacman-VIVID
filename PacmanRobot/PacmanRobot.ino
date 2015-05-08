@@ -153,7 +153,6 @@ LineSensor lineTop(2,3,4,5);
 LineSensor lineRight(6,7,8,9);
 LineSensor lineBottom(42,44,46,48);
 LineSensor lineLeft(43,45,47,49);
-
 RF24 radio(10,11);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
@@ -168,14 +167,17 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER_STRING "GHOST2"
 // will make this selectable via user interface on robot
 
-#define STEPPER_SPEED 800
+#define M_SPEED 400
+#define M_FAST  500
+#define M_SLOW  300
 #define STEPPER_MAX_SPEED 1000
 
 
 /*
  * Global Variables
  */
- 
+
+volatile int moveFlag = 0;
 playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 //uint16_t robotSpeed = STEPPER_SPEED;
@@ -203,6 +205,7 @@ bool is_open(int x, int y, heading_t dir);
 bool collision_detect(heading_t h);
 void decide_direction(uint8_t options);
 void move_robot(void);
+void move_flag(void);
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t* expand(int *x,int *y, heading_t h);
@@ -228,7 +231,7 @@ void init_motors() {
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
   Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
-  Timer1.attachInterrupt( move_robot );  // interrupt calls motion directly, setting flag
+  Timer1.attachInterrupt( move_flag );  // interrupt calls motion directly, setting flag
                                          // is alternate option
   
 }
@@ -297,7 +300,13 @@ void loop() {
   }*/
   //map_expand();
   //collision_detect();
-    
+  if(Serial.available()){
+    globalHeading=Serial.read();
+  }
+  if(moveFlag){
+    moveFlag = 0;
+    move_robot();
+  }
 }
 
 void print_game() {
@@ -313,7 +322,6 @@ void print_game() {
 }
 
 /**    RADIO NETWORK FUNCTIONS    **/
-
 void update_game() {
   int i;
   if (radio.available()) {
@@ -343,6 +351,9 @@ bool detect_intersection() {
   return true;
 }
 
+void move_flag(){
+  moveFlag = 1;
+}
 
 void move_robot() {
   // use of pointers helps translate robot movement functions based on direction
@@ -397,10 +408,50 @@ void move_robot() {
   }
   // Will need to set speed based on relative line positioning.
   // Need to investigate whether rapid polling of set speed causes problems.
-  m_frontLeft->setSpeed(STEPPER_SPEED);
-  m_frontRight->setSpeed(-STEPPER_SPEED);
-  m_backLeft->setSpeed(STEPPER_SPEED);
-  m_backRight->setSpeed(-STEPPER_SPEED);
+  line_pos_t readFront = lineFront->get_line();
+  line_pos_t readBack = lineBack->get_line();
+  if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
+    //front pair of motors
+    if(readFront==RIGHT){
+      m_frontLeft->setSpeed(M_SPEED+100);
+      m_frontRight->setSpeed(-(M_SPEED-100));
+    } else if(readFront==LEFT){
+      m_frontLeft->setSpeed(M_SPEED-100);
+      m_frontRight->setSpeed(-(M_SPEED+100));
+    } else {
+      m_frontLeft->setSpeed(M_SPEED);
+      m_frontRight->setSpeed(-M_SPEED);
+    }
+    //back pair of motors, opposite
+    if(readBack==RIGHT){
+      m_backLeft->setSpeed(M_SPEED+100);
+      m_backRight->setSpeed(-(M_SPEED-100));
+    } else if(readBack==LEFT){
+      m_backLeft->setSpeed(M_SPEED-100);
+      m_backRight->setSpeed(-(M_SPEED+100));
+    } else {
+      m_backLeft->setSpeed(M_SPEED);
+      m_backRight->setSpeed(M_SPEED);
+    }
+  } else { // one sensor must shift whole robot
+    if(readFront==RIGHT||readBack==LEFT){
+      m_frontLeft->setSpeed(M_SPEED+100);
+      m_backRight->setSpeed(-(M_SPEED+100));
+      m_frontRight->setSpeed(-(M_SPEED-100));
+      m_backLeft->setSpeed(M_SPEED-100);
+    } else if(readFront==LEFT||readBack==RIGHT){
+      m_frontRight->setSpeed(-(M_SPEED+100));
+      m_backLeft->setSpeed(M_SPEED+100);
+      m_frontLeft->setSpeed(M_SPEED-100);
+      m_backRight->setSpeed(-(M_SPEED-100));
+    } else {
+      //lost the line
+      m_frontLeft->setSpeed(M_SPEED);
+      m_backLeft->setSpeed(M_SPEED);
+      m_frontRight->setSpeed(-M_SPEED);
+      m_backRight->setSpeed(-M_SPEED);
+    }
+  }
   
   m_frontLeft->runSpeed();
   m_frontRight->runSpeed();
