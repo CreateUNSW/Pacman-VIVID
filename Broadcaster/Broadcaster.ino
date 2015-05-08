@@ -26,7 +26,8 @@ typedef struct _robot {
 // Contains information about all robots currently in play.
 typedef struct _game_state {
     uint8_t header;
-    uint8_t command;	
+    uint8_t command;
+    uint8_t override_dir;	
     robot pac;
     robot g1;
     robot g2;
@@ -40,12 +41,14 @@ typedef struct _game_state {
 #define HEADER 0xC8
 
 // Game commands
+#define NOP      0
 #define START    1
 #define STOP     2
 #define HIDE     3
 #define PAUSE    4
 #define RESUME   5 
 #define RUN_MODE 6
+#define MANUAL_OVERRIDE 7
 
 #define GAME_SIZE sizeof(game_state)
 
