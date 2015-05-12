@@ -25,12 +25,14 @@
 #define HEADER 0xC8
 
 // Game commands
+#define NOP      0
 #define START    1
 #define STOP     2
 #define HIDE     3
 #define PAUSE    4
 #define RESUME   5 
 #define RUN_MODE 6
+#define MANUAL_OVERRIDE 7
 
 #define GAME_SIZE sizeof(game_state_t)
 
@@ -91,7 +93,8 @@ typedef struct {
 // Contains information about all robots currently in play.
 typedef struct {
     uint8_t header;
-    uint8_t command;	
+    uint8_t command;
+    uint8_t override_dir;	
     robot_t pac;
     robot_t g[NUM_GHOSTS];
 } game_state_t;
@@ -153,7 +156,7 @@ LineSensor lineTop(2,3,4,5);
 LineSensor lineRight(6,7,8,9);
 LineSensor lineBottom(42,44,46,48);
 LineSensor lineLeft(43,45,47,49);
-RF24 radio(10,11);
+RF24 radio(9,10);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
 
@@ -185,6 +188,8 @@ position_t goal;
 heading_t globalHeading = '0';
 
 game_state_t game;
+// Extra space to prevent corruption of data, due to the required 32 byte payload.
+uint8_t __space[21];
 // Pointer to be used when updating game from radio
 game_state_t *g = &game;
 
@@ -223,6 +228,7 @@ void init_radio() {
   radio.setPALevel(RF24_PA_MAX);
   radio.setAutoAck(false);
   radio.startListening();
+  radio.setPayloadSize(32);
 }
 
 void init_motors() {
@@ -260,10 +266,10 @@ void init_game() {
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
-  init_motors();
+  Serial.begin(57600);
+  //init_motors();
   //pinMode(4,OUTPUT);
-  //init_radio();
+  init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game(); 
@@ -273,7 +279,30 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  //update_game();
+  while (1) {
+    update_game();
+    
+    if (game.command == MANUAL_OVERRIDE) {
+       Serial.println("Received instruction..."); 
+       game.command = NOP;
+       Serial.print("Dir: ");
+       switch(game.override_dir) {
+         case U:
+           Serial.println('U');
+           break;
+         case D:
+           Serial.println('D');
+           break;
+         case L:
+           Serial.println('L');
+           break;
+         case R:
+           Serial.println('R');
+           break;   
+       }
+       Serial.println("Processed instruction.");   
+    }
+  }
   
   // If header is wrong, return to receive update again
   /*if (game.header != checksum()) {
@@ -325,7 +354,7 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    //Serial.println("Data available");
+    Serial.println("Data available");
     //digitalWrite(4,HIGH);
     radio.read((char *)&game,GAME_SIZE);
   } else {
@@ -337,7 +366,7 @@ uint8_t checksum() {
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
-        sum += ((char *)g)[i] & (1 << j) >> j;
+        sum += (((char *)g)[i] & (1 << j)) >> j;
      }
   }
   return sum;
