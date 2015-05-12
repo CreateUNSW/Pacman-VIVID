@@ -14,13 +14,13 @@
 typedef struct _position {
     uint8_t x : 4;
     uint8_t y : 4;
-} position;
+} position_t;
 
-typedef char heading;
+typedef char heading_t;
 
 typedef struct _robot {
-    position p;
-    heading h;
+    position_t p;
+    heading_t h;
 } robot;
 
 // Contains information about all robots currently in play.
@@ -81,21 +81,21 @@ void broadcast_game(void);
  // Only need a single pipe due to one-way comms.
 const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
-int time;
+
 game_state game;
+uint8_t __space[21];
 // Pointer to be used when updating game from radio
-game_state *g = &game;
 // Pin definitions
+int left  = 2;
 int up    = 3;
-int down  = 4;
-int left  = 5;
-int right = 6;
+int right = 4;
+int down  = 5;
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
+  Serial.begin(57600);
   init_radio();
-  init_game();
+  //init_game();
   pinMode(up   , INPUT);
   pinMode(down , INPUT);
   pinMode(left , INPUT);
@@ -118,66 +118,55 @@ void loop() {
     game.override_dir = 0;
     game.command = NOP;
   }
-  // Send game information
-  broadcast_game();
+  
+  if (game.command == MANUAL_OVERRIDE) {
+    // Send game information
+    //int time = millis();
+    Serial.println("I am transmitting something");
+    broadcast_game();
+    //Serial.println(millis() - time);
+    //Serial.println(game.override_dir);
+  }
+
+  //Serial.println("Now start over again!");
 }
 
 void init_game() {
-  // All data should be out of bounds for the controller  
+  // All data should be zeroed out to create valid checksum  
   game.command = NOP;
   game.override_dir = 0;
-  game.pac = {-1,-1};
-  game.g1 =  {-1,-1};
-  game.g2 =  {-1,-1};
-  game.g3 =  {-1,-1};
+  game.pac = {0,0};
+  game.g1 =  {0,0};
+  game.g2 =  {0,0};
+  game.g3 =  {0,0};
 }
 
 void init_radio() {
   radio.begin();
-  radio.setRetries(0,0);
+  radio.setRetries(15,15);
   radio.openWritingPipe(pipe);
   radio.setChannel(BROADCAST_CHANNEL);
   radio.setDataRate(RF24_250KBPS);
   radio.setPALevel(RF24_PA_MAX);
-  radio.setAutoAck(false);
   radio.stopListening();
+  radio.setAutoAck(false);
+  radio.setPayloadSize(32);
 }
 
 // Used by Matlab connected arduino 
 void broadcast_game() {
   int i;
-  /*
-  for (i = 0; i < GAME_SIZE; i++) {
-    Serial.println(buf[i], DEC);
-    Serial.print("Byte ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(((char *)g)[i], DEC);
-  }
-  Serial.println();
-  */
-  // This increment loop avoids modifying the checksum
-  for (i = 1; i < GAME_SIZE; i++) {
-    ((char *)g)[i] += 1;
-    //time = millis();
-    set_checksum();
-    //Serial.println(millis()- time);
-    radio.write((char *)g,GAME_SIZE);  
-  }
-  /*if () {
-     Serial.println("TX: Success");
-  } else {
-      Serial.println("TX: FAILURE");
-  }*/
+  set_checksum();
+  radio.write((char *)&game,GAME_SIZE); 
 }
 
 // A simple checksum calculator, operates within 1ms
 void set_checksum(void) {
-  uint8_t   i, j, sum = 0;
+  uint8_t  i, j, sum = 0;
   // Don't include checksum
   for (i = 1; i < GAME_SIZE; i++) {
     for (j = 0; j < 8; j++) {
-      sum += ((char *)g)[i] & (1 << j) >> j;
+      sum += (((char *)&game)[i] & (1 << j)) >> j;
       /*Serial.print("i:");
       Serial.print(i);
       Serial.print(" j:");
@@ -187,6 +176,6 @@ void set_checksum(void) {
      */ 
     }
   }
-  g->header = sum;
+  game.header = sum;
   
 }
