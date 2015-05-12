@@ -70,16 +70,17 @@ void broadcast_game(void);
  * Global Variables
  */
  // Only need a single pipe due to one-way comms.
-const uint64_t pipe = 0xF0F0F0F0E1LL;
 RF24 radio(9,10);
-int time;
+const uint64_t pipe = 0xF0F0F0F0E1LL;
 game_state game;
-// Pointer to be used when updating game from radio
-game_state *g = &game;
+uint8_t __space[21];
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
+  
+  
+  Serial.begin(57600);
+  
   init_radio();
   init_game();
   Serial.println("Start the game!");
@@ -87,49 +88,56 @@ void setup() {
 
 void loop() {
   broadcast_game();
-}
+}  
 
 void init_game() {
   game.command = START;
 }
 
 void init_radio() {
+  Serial.print("init_radio...");
   radio.begin();
   radio.setRetries(0,0);
   radio.openWritingPipe(pipe);
   radio.setChannel(BROADCAST_CHANNEL);
   radio.setDataRate(RF24_250KBPS);
   radio.setPALevel(RF24_PA_MAX);
-  radio.setAutoAck(false);
   radio.stopListening();
+  radio.setAutoAck(false);
+  radio.setPayloadSize(32);
+  Serial.println("done");
 }
 
-// Used by Matlab connected arduino 
-void broadcast_game() {
+void print_game() {
   int i;
-  /*
   for (i = 0; i < GAME_SIZE; i++) {
-    Serial.println(buf[i], DEC);
     Serial.print("Byte ");
     Serial.print(i);
     Serial.print(": ");
-    Serial.println(((char *)g)[i], DEC);
+    Serial.println(((char *)&game)[i], DEC);
   }
   Serial.println();
+   
+}
+// Used by Matlab connected arduino 
+int i;
+void broadcast_game() {
+  // This loop is just to test the data that is being sent
+  // modifies the checksum, though this is later corrected
+  /*if (i > 255*GAME_SIZE)
+    i = 0;
+    
+  ((char *)&game)[(i++)%GAME_SIZE]++;
   */
-  // This increment loop avoids modifying the checksum
-  for (i = 1; i < GAME_SIZE; i++) {
-    ((char *)g)[i] += 1;
-    time = millis();
-    set_checksum();
-    Serial.println(millis()- time);
-    radio.write((char *)g,GAME_SIZE);  
-  }
-  /*if () {
+  
+  set_checksum();
+  
+  if (radio.write((char *)&game, GAME_SIZE)) {
      Serial.println("TX: Success");
   } else {
       Serial.println("TX: FAILURE");
-  }*/
+  }
+  delay(1);
 }
 
 // A simple checksum calculator, operates within 1ms
@@ -138,16 +146,12 @@ void set_checksum(void) {
   // Don't include checksum
   for (i = 1; i < GAME_SIZE; i++) {
     for (j = 0; j < 8; j++) {
-      sum += ((char *)g)[i] & (1 << j) >> j;
-      /*Serial.print("i:");
-      Serial.print(i);
-      Serial.print(" j:");
-      Serial.print(j);
-      Serial.print(" sum:");
-      Serial.println(sum);
-     */ 
+      sum += (((char *)&game)[i] & (1 << j)) >> j;
     }
+    //Serial.println(sum);
   }
-  g->header = sum;
+  //Serial.println();
+  //Serial.println();
+  game.header = sum;
   
 }
