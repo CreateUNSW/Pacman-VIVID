@@ -1,0 +1,11 @@
+s = serial('COM4');
+set (s, 'BaudRate', 57600);
+set (s, 'Terminator', '');
+fopen(s);
+pause(5);
+fwrite(s,1);
+pause(0.5);
+fwrite(s,0);
+pause(5);
+fclose(s);
+delete(s);
