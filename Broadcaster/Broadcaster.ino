@@ -86,8 +86,26 @@ void setup() {
   Serial.println("Start the game!");
 }
 
+int i;
 void loop() {
-  broadcast_game();
+  if (Serial.available()) {    
+    i = 0;
+    while(Serial.available() && i < GAME_SIZE) {
+        ((uint8_t *)&game)[i++] = Serial.read();      
+        //Serial.write(((uint8_t *)&game)[i-1]);
+    }
+    
+    //((uint8_t *)&game)[i] = '\0';
+    //Serial.println((char *)&game);
+    //Serial.println((char *)game_buf);
+    delay(2);
+    //for (i = 0; i < 1; i++)
+    {
+      broadcast_game();
+    }
+    delay(2);
+  }
+  //broadcast_game();
 }  
 
 void init_game() {
@@ -120,7 +138,6 @@ void print_game() {
    
 }
 // Used by Matlab connected arduino 
-int i;
 void broadcast_game() {
   // This loop is just to test the data that is being sent
   // modifies the checksum, though this is later corrected
@@ -131,13 +148,9 @@ void broadcast_game() {
   */
   
   set_checksum();
-  
-  if (radio.write((char *)&game, GAME_SIZE)) {
-     Serial.println("TX: Success");
-  } else {
-      Serial.println("TX: FAILURE");
-  }
-  delay(1);
+  delay(2);
+  radio.write((char *)&game, GAME_SIZE);
+  delay(2);
 }
 
 // A simple checksum calculator, operates within 1ms
