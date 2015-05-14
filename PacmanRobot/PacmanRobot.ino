@@ -170,9 +170,9 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER_STRING "GHOST2"
 // will make this selectable via user interface on robot
 
-#define M_SPEED 400
-#define M_FAST  500
-#define M_SLOW  300
+#define M_SPEED 300
+#define M_FAST  250
+#define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
 
 
@@ -186,6 +186,7 @@ robot_t *thisRobot;
 //uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading = '0';
+heading_t currentHeading = '0';
 
 game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
@@ -236,7 +237,7 @@ void init_motors() {
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
-  Timer1.initialize(10000);  // 100 us hopefully fast enough for variable speeds
+  Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
   Timer1.attachInterrupt( move_flag );  // interrupt calls motion directly, setting flag
                                          // is alternate option
   
@@ -268,9 +269,9 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
   Serial.println("Starting run...");
-  //init_motors();
+  init_motors();
   //pinMode(4,OUTPUT);
-  init_radio();
+  //init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game(); 
@@ -281,7 +282,7 @@ void setup() {
 int i = 0;
 void loop() {
   // put your main code here, to run repeatedly:
-  while (1) {
+  /*while (1) {
     update_game();
     if (Serial.available()) {
       while (Serial.available()) {
@@ -316,7 +317,7 @@ void loop() {
        }
        Serial.println("Processed instruction.");   
     }
-  }
+  }*/
   
   // If header is wrong, return to receive update again
   /*if (game.header != checksum()) {
@@ -479,6 +480,7 @@ void move_robot() {
       m_topRight.setSpeed(0);
       m_bottomLeft.setSpeed(0);
       m_bottomRight.setSpeed(0);
+      currentHeading=globalHeading;
       return; //exit here
       break;
   }
@@ -486,50 +488,51 @@ void move_robot() {
   // Need to investigate whether rapid polling of set speed causes problems.
   line_pos_t readFront = lineFront->get_line();
   line_pos_t readBack = lineBack->get_line();
-  if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
-    //front pair of motors
-    if(readFront==RIGHT){
-      m_frontLeft->setSpeed(M_SPEED+100);
-      m_frontRight->setSpeed(-(M_SPEED-100));
-    } else if(readFront==LEFT){
-      m_frontLeft->setSpeed(M_SPEED-100);
-      m_frontRight->setSpeed(-(M_SPEED+100));
-    } else {
-      m_frontLeft->setSpeed(M_SPEED);
-      m_frontRight->setSpeed(-M_SPEED);
-    }
-    //back pair of motors, opposite
-    if(readBack==RIGHT){
-      m_backLeft->setSpeed(M_SPEED+100);
-      m_backRight->setSpeed(-(M_SPEED-100));
-    } else if(readBack==LEFT){
-      m_backLeft->setSpeed(M_SPEED-100);
-      m_backRight->setSpeed(-(M_SPEED+100));
-    } else {
-      m_backLeft->setSpeed(M_SPEED);
-      m_backRight->setSpeed(M_SPEED);
-    }
-  } else { // one sensor must shift whole robot
-    if(readFront==RIGHT||readBack==LEFT){
-      m_frontLeft->setSpeed(M_SPEED+100);
-      m_backRight->setSpeed(-(M_SPEED+100));
-      m_frontRight->setSpeed(-(M_SPEED-100));
-      m_backLeft->setSpeed(M_SPEED-100);
-    } else if(readFront==LEFT||readBack==RIGHT){
-      m_frontRight->setSpeed(-(M_SPEED+100));
-      m_backLeft->setSpeed(M_SPEED+100);
-      m_frontLeft->setSpeed(M_SPEED-100);
-      m_backRight->setSpeed(-(M_SPEED-100));
-    } else {
-      //lost the line
-      m_frontLeft->setSpeed(M_SPEED);
-      m_backLeft->setSpeed(M_SPEED);
-      m_frontRight->setSpeed(-M_SPEED);
-      m_backRight->setSpeed(-M_SPEED);
+  if(currentHeading!=globalHeading){
+    currentHeading=globalHeading;
+    if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
+      //front pair of motors
+      if(readFront==RIGHT){
+        m_frontLeft->setSpeed(M_SPEED+100);
+        m_frontRight->setSpeed(-(M_SPEED-100));
+      } else if(readFront==LEFT){
+        m_frontLeft->setSpeed(M_SPEED-100);
+        m_frontRight->setSpeed(-(M_SPEED+100));
+      } else {
+        m_frontLeft->setSpeed(M_SPEED);
+        m_frontRight->setSpeed(-M_SPEED);
+      }
+      //back pair of motors, opposite
+      if(readBack==RIGHT){
+        m_backLeft->setSpeed(M_SPEED+100);
+        m_backRight->setSpeed(-(M_SPEED-100));
+      } else if(readBack==LEFT){
+        m_backLeft->setSpeed(M_SPEED-100);
+        m_backRight->setSpeed(-(M_SPEED+100));
+      } else {
+        m_backLeft->setSpeed(M_SPEED);
+        m_backRight->setSpeed(M_SPEED);
+      }
+    } else { // one sensor must shift whole robot
+      if(readFront==RIGHT||readBack==LEFT){
+        m_frontLeft->setSpeed(M_SPEED+100);
+        m_backRight->setSpeed(-(M_SPEED+100));
+        m_frontRight->setSpeed(-(M_SPEED-100));
+        m_backLeft->setSpeed(M_SPEED-100);
+      } else if(readFront==LEFT||readBack==RIGHT){
+        m_frontRight->setSpeed(-(M_SPEED+100));
+        m_backLeft->setSpeed(M_SPEED+100);
+        m_frontLeft->setSpeed(M_SPEED-100);
+        m_backRight->setSpeed(-(M_SPEED-100));
+      } else {
+        //lost the line
+        m_frontLeft->setSpeed(M_SPEED);
+        m_backLeft->setSpeed(M_SPEED);
+        m_frontRight->setSpeed(-M_SPEED);
+        m_backRight->setSpeed(-M_SPEED);
+      }
     }
   }
-  m_frontLeft->setSpeed(0);
-  m_backRight->setSpeed(0);
   m_frontLeft->runSpeed();
   m_frontRight->runSpeed();
   m_backLeft->runSpeed();
