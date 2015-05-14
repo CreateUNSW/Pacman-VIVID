@@ -267,21 +267,35 @@ void init_game() {
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
+  Serial.println("Starting run...");
   //init_motors();
   //pinMode(4,OUTPUT);
   init_radio();
   //randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game(); 
+  
 }
 
 /**    MAIN FUNCTIONS    **/
-
+int i = 0;
 void loop() {
   // put your main code here, to run repeatedly:
   while (1) {
     update_game();
-    
+    if (Serial.available()) {
+      while (Serial.available()) {
+        Serial.read();
+      }
+      i = 0;
+      Serial.println("Reset count");
+    }
+    if (game.header == checksum()) {
+      Serial.print("Received packets = ");
+      Serial.println(++i);
+      print_game();
+      //delay(100); 
+    }
     if (game.command == MANUAL_OVERRIDE) {
        Serial.println("Received instruction..."); 
        game.command = NOP;
@@ -340,12 +354,43 @@ void loop() {
 
 void print_game() {
    int i;
+   /*
+   Serial.print("game.header = ");
+   Serial.println(game.header);
+   Serial.print("game.command = ");
+   Serial.println(game.command);
+   Serial.print("game.override_dir = ");
+   Serial.println(game.override_dir);
+   
+   Serial.print("game.pac.x  = ");
+   Serial.print(game.pac.p.x);
+   Serial.print(" game.pac.y  = ");
+   Serial.print(game.pac.p.y);
+   Serial.print(" game.pac.heading  = ");
+   Serial.println(game.pac.h);
+   
+    for (i = 0; i < NUM_GHOSTS; i++) {
+       Serial.print("game.g[");
+       Serial.print(i);
+       Serial.print("].x = ");
+       Serial.print(game.g[i].p.x);  
+       Serial.print(" game.g[");
+       Serial.print(i);
+       Serial.print("].y = ");
+       Serial.print(game.g[i].p.y);
+       Serial.print(" game.g[");
+       Serial.print(i);
+       Serial.print("].heading = ");
+       Serial.println(game.g[i].h);
+    }
+   */
+
    for (i = 0; i < GAME_SIZE; i++) {
-      Serial.print("Byte ");
+      Serial.print("Byte \0");
       Serial.print(i);
       Serial.print(": ");
       Serial.println(*((char *)&game+i), DEC);
-   } 
+   }
    Serial.println();
    Serial.println();Serial.println();
 }
@@ -354,10 +399,12 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    Serial.println("Data available");
+    //Serial.println("Data available");
     //digitalWrite(4,HIGH);
     radio.read((char *)&game,GAME_SIZE);
+    delay(1);
   } else {
+    game.header = -1;
     //digitalWrite(4,LOW);
   }
 }
