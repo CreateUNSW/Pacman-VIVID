@@ -15,6 +15,5 @@ preview(cam);
 %cam.Contrast
 %cam.Saturation
 %cam.Brightness
-%cam.Exposure
 %cam.Sharpness
 %cam.Gamma
