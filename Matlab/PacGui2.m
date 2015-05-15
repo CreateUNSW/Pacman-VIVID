@@ -71,7 +71,8 @@ cam.WhiteBalanceMode = 'manual';
 handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
 preview(cam,handles.axes2);
 hold on;
-plotHandle = plot(NaN,NaN,'r*');
+plotHandle.h1 = plot(NaN,NaN,'r*');
+plotHandle.h2 = line(NaN,NaN,'Color','g');
 
 
 % Update handles structure
@@ -167,7 +168,9 @@ if dotPointEntry<=0
 end
 dotPoints(dotPointEntry,:) = [0,0];
 dotPointEntry = dotPointEntry - 1;
-set(plotHandle,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
+children = plotHandle.h1.Parent.Children;
+delete(findobj(children,'Type','Line'));
+set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
 
 
 % --- Executes on button press in clearall.
@@ -180,7 +183,9 @@ global dotPointEntry;
 global plotHandle;
 dotPoints = zeros(81,2);
 dotPointEntry = 0;
-set(plotHandle,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
+children = plotHandle.h1.Parent.Children;
+delete(findobj(children,'Type','Line'));
+set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
 
 function LogPoint(hObject, eventdata)
 global plotHandle;
@@ -193,9 +198,21 @@ dotPointEntry = dotPointEntry+1;
 axesHandle = get(hObject,'Parent');
 clickCoord = get(axesHandle, 'CurrentPoint');
 dotPoints(dotPointEntry,:) = clickCoord(1,1:2);
-set(plotHandle,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
+set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
 if dotPointEntry==81
     % call function
+    T = reshape(dotPoints,9,9,2);
+    yy = mean(T(:,:,2));
+    xx = mean(T(:,:,1)');
+    axes = plotHandle.h2.Parent;
+    for i=1:9
+%         set(plotHandle.h2,'xdata',[xx(i),xx(i)],'ydata',[0,360]);
+          line([xx(i),xx(i)],[0,360],'Color','g');
+          line([0,480],[yy(i),yy(i)],'Color','g');
+    end;
+%     linex = [xx,xx;
+    
+    
 end;
 
 
