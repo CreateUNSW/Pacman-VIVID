@@ -1,5 +1,17 @@
 #include <SPI.h>
 #include "RF24.h"
+/*
+Pacman Broadcaster code
+by Mark Johnson
+
+Pacman Maze LED code
+Library used: Adafruit NeoPixel: https://github.com/adafruit/Adafruit_NeoPixel
+by Yunzhen Zhang
+
+NOTE: Using an Arduino Mega for this, as Uno does not have enough SRAM to support all the NeoPixels
+(Consider each neopixel takes 3 bytes of memory, we are using 600+ of them regardless whether they're on or off)
+To do: investigate a bug when I include Serial.begin() in the code and the code refuses to compile...
+*/
 
 #include <Adafruit_NeoPixel.h>
 #include <avr/power.h>
