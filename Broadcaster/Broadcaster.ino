@@ -55,7 +55,7 @@ typedef struct _game_state {
 /*
  * Radio definitions
  */
-
+#define NUM_RETRANS 5
 #define BROADCAST_CHANNEL 72
 
 /*
@@ -90,34 +90,26 @@ int i;
 void loop() {
   if (Serial.available()) {    
     i = 0;
-    // Delay to make sure everything has been buffered
-    delay(2);
+    delay(1);
     while(Serial.available() && i < GAME_SIZE) {
-        ((uint8_t *)&game)[i++] = Serial.read();      
-        //Serial.write(((uint8_t *)&game)[i-1]);
+        ((uint8_t *)&game)[i++] = Serial.read();
+        delayMicroseconds(250);
     }
-   
-    //((uint8_t *)&game)[i] = '\0';
-    //Serial.println((char *)&game);
-    //Serial.println((char *)game_buf);
-    delay(2);
-    //for (i = 0; i < 1; i++)
-    {
+    delay(1);
+    for (i = 0; i < NUM_RETRANS; i++) 
       broadcast_game();
-    }
-    delay(2);
   }
-  //broadcast_game();
-}  
 
+}
+// Game must remain stopped until matlab is ready
 void init_game() {
-  game.command = START;
+  game.command = STOP;
 }
 
 void init_radio() {
   Serial.print("init_radio...");
   radio.begin();
-  radio.setRetries(0,0);
+  radio.setRetries(15,15);
   radio.openWritingPipe(pipe);
   radio.setChannel(BROADCAST_CHANNEL);
   radio.setDataRate(RF24_250KBPS);
@@ -141,32 +133,17 @@ void print_game() {
 }
 // Used by Matlab connected arduino 
 void broadcast_game() {
-  // This loop is just to test the data that is being sent
-  // modifies the checksum, though this is later corrected
-  /*if (i > 255*GAME_SIZE)
-    i = 0;
-    
-  ((char *)&game)[(i++)%GAME_SIZE]++;
-  */
-  
   set_checksum();
-  delay(2);
   radio.write((char *)&game, GAME_SIZE);
-  delay(2);
 }
 
 // A simple checksum calculator, operates within 1ms
 void set_checksum(void) {
   uint8_t   i, j, sum = 0;
-  // Don't include checksum
   for (i = 1; i < GAME_SIZE; i++) {
     for (j = 0; j < 8; j++) {
       sum += (((char *)&game)[i] & (1 << j)) >> j;
     }
-    //Serial.println(sum);
   }
-  //Serial.println();
-  //Serial.println();
   game.header = sum;
-  
 }

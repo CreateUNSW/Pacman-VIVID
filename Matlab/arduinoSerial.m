@@ -1,11 +1,8 @@
 %% Set up the serial communication to arduino
 % NOTE: This will need to be changed to the write port on your PC
 % The next 4 lines need to be run outside of this script for some reason.
-s = serial('COM6');
-set (s, 'BaudRate', 57600);
-set (s, 'Terminator', '');
+s = serial('COM11', 'BaudRate', 57600, 'Terminator', '');
 fopen(s);
-
 % To clean up ALL open com ports, run this line
 % fclose(instrfind);
 
@@ -33,7 +30,7 @@ L = 1;
 %% Create game structure
 % Print details of what serial comms. have been done
 game(1).header       = 1;
-game(1).command      = 1;
+game(1).command      = 0;
 game(1).override_dir = 1;
 game(1).pacman       = struct('position', {}, 'heading', {});
 game(1).g            = struct('position', {}, 'heading', {});
@@ -78,14 +75,15 @@ A(11) = game(3).g.heading;
 % Print A to console
 A
 % Write 10 times then quit.
-% for i = 1:10
-%    fwrite(s, A);
-%    pause(0.3);
-% end
+for i = 1:100
+   fwrite(s, A+i);
+   pause(0.1);
+end
 
-fwrite(s,A);
-pause(1);
+% fwrite(s,A);
+% pause(1);
 % Print details of what serial comms. have been done
 s
 % End of file, cleanup
 fclose(s);
+delete(s);
