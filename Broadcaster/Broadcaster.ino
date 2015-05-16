@@ -90,11 +90,13 @@ int i;
 void loop() {
   if (Serial.available()) {    
     i = 0;
+    // Delay to make sure everything has been buffered
+    delay(2);
     while(Serial.available() && i < GAME_SIZE) {
         ((uint8_t *)&game)[i++] = Serial.read();      
         //Serial.write(((uint8_t *)&game)[i-1]);
     }
-    
+   
     //((uint8_t *)&game)[i] = '\0';
     //Serial.println((char *)&game);
     //Serial.println((char *)game_buf);
