@@ -1,4 +1,5 @@
 function varargout = PacGui2(varargin)
+global cam;
 % PACGUI2 MATLAB code for PacGui2.fig
 %      PACGUI2, by itself, creates a new PACGUI2 or raises the existing
 %      singleton*.
@@ -63,13 +64,9 @@ dotPoints = zeros(81,2);
 handles.output = hObject;
 specialObject = hObject;
 
-delete(cam);
-
-cam = webcam(2);
-cam.ExposureMode = 'manual';
-cam.WhiteBalanceMode = 'manual';
 handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
-preview(cam,handles.axes2);
+% preview(cam,handles.axes2);
+camera_start('calibration',handles.axes2);
 hold on;
 plotHandle.h1 = plot(NaN,NaN,'r*');
 plotHandle.h2 = line(NaN,NaN,'Color','g');
@@ -110,7 +107,8 @@ function saturation_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to saturation (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
-set(hObject,'Min',0,'Max',127,'Value',38);
+global cam;
+set(hObject,'Min',0,'Max',127,'Value',cam.Saturation);
 % Hint: slider controls usually have a light gray background.
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
@@ -134,7 +132,8 @@ function contrast_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to contrast (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
-set(hObject,'Min',0,'Max',30,'Value',13);
+global cam;
+set(hObject,'Min',0,'Max',30,'Value',cam.Contrast);
 % Hint: slider controls usually have a light gray background.
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
@@ -236,8 +235,8 @@ function brightness_CreateFcn(hObject, eventdata, handles)
 
 % Hint: slider controls usually have a light gray background.
 % global cam;
-val = 0;
-set(hObject,'Min',-64,'Max',64,'Value',val);
+global cam;
+set(hObject,'Min',-64,'Max',64,'Value',cam.Brightness);
 % set(hObject,'Value',val);
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
@@ -260,8 +259,8 @@ function whitebalance_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to whitebalance (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
-val = 5000;
-set(hObject,'Min',2800,'Max',6500,'Value',val);
+global cam;
+set(hObject,'Min',2800,'Max',6500,'Value',cam.WhiteBalance);
 % Hint: slider controls usually have a light gray background.
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
@@ -283,8 +282,8 @@ function exposure_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to exposure (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
-val = -5;
-set(hObject,'Min',-12,'Max',-1.01,'Value',val);
+global cam;
+set(hObject,'Min',-12,'Max',-1.01,'Value',cam.Exposure);
 % Hint: slider controls usually have a light gray background.
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);

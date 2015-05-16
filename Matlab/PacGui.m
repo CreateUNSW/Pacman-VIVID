@@ -22,7 +22,7 @@ function varargout = PacGui(varargin)
 
 % Edit the above text to modify the response to help PacGui
 
-% Last Modified by GUIDE v2.5 16-May-2015 15:27:07
+% Last Modified by GUIDE v2.5 16-May-2015 17:39:17
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -55,6 +55,10 @@ function PacGui_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for PacGui
 handles.output = hObject;
+
+handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
+% preview(cam,handles.axes2);
+camera_start('game',handles.axes2);
 
 % Update handles structure
 guidata(hObject, handles);
@@ -118,3 +122,15 @@ function pause_Callback(hObject, eventdata, handles)
 % hObject    handle to pause (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes when user attempts to close figure1.
+function figure1_CloseRequestFcn(hObject, eventdata, handles)
+% hObject    handle to figure1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: delete(hObject) closes the figure
+stop(timerfind);
+delete(timerfind);
+delete(hObject);
