@@ -1,6 +1,13 @@
 #include <SPI.h>
 #include "RF24.h"
 
+#include <Adafruit_NeoPixel.h>
+#include <avr/power.h>
+
+#define TOTALLEDS 66 // that's 2.5m of led strips
+#define SPACING 8
+#define TOTALSTRIPS 9 //for a 9x9 map
+
 /*
  * PACMAN RF Data Struct and utilities
  */
@@ -58,8 +65,9 @@ typedef struct _game_state {
 #define NUM_RETRANS 5
 #define BROADCAST_CHANNEL 72
 
+
 /*
- * Functions to be used by robots and hub
+ * Functions to be used by broadcaster
  */
 
 void init_radio(void);
@@ -69,21 +77,48 @@ void broadcast_game(void);
 /*
  * Global Variables
  */
- // Only need a single pipe due to one-way comms.
-RF24 radio(9,10);
+// Only need a single pipe due to one-way comms.
+RF24 radio(48,49);
 const uint64_t pipe = 0xF0F0F0F0E1LL;
 game_state game;
 uint8_t __space[21];
 
+byte mapxy[9][9] =
+{{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1},
+{1, 1, 1, 1, 1, 1, 1, 1, 1}};
+
+Adafruit_NeoPixel dots[9] =
+{
+Adafruit_NeoPixel(TOTALLEDS, 2, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 3, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 4, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 5, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 6, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 7, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 8, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 9, NEO_GRB + NEO_KHZ800),
+Adafruit_NeoPixel(TOTALLEDS, 10, NEO_GRB + NEO_KHZ800)
+};
+
+
 void setup() {
-  // put your setup code here, to run once:
-  
-  
   Serial.begin(57600);
-  
+  for (int i = 0; i < TOTALSTRIPS; i++) {
+     dots[i].begin();
+     //clears all leds
+     dots[i].show(); 
+  }
+  //initialise map
+  showMap();
   init_radio();
   init_game();
-  Serial.println("Start the game!");
 }
 
 int i;
@@ -107,7 +142,7 @@ void init_game() {
 }
 
 void init_radio() {
-  Serial.print("init_radio...");
+  //Serial.print("init_radio...");
   radio.begin();
   radio.setRetries(15,15);
   radio.openWritingPipe(pipe);
@@ -117,7 +152,7 @@ void init_radio() {
   radio.stopListening();
   radio.setAutoAck(false);
   radio.setPayloadSize(32);
-  Serial.println("done");
+  //Serial.println("done");
 }
 
 void print_game() {
@@ -146,4 +181,18 @@ void set_checksum(void) {
     }
   }
   game.header = sum;
+}
+
+/** MAZE LED FUNCTIONS **/
+
+//shows the initital 9 x 9 grid
+void showMap() {
+  for (int i = 0; i < TOTALSTRIPS; i++) {
+    for (int j = 0; j < TOTALLEDS; j++) {
+      if (j % SPACING == 0) {  
+        dots[i].setPixelColor(j, dots[i].Color(50,50,50));
+      }
+      dots[i].show();
+    }
+  }  
 }
