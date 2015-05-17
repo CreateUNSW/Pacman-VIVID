@@ -111,15 +111,21 @@ class LineSensor
 public:
   LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4);
   line_pos_t get_line();
+  void calibrate();
 private:
   uint8_t _pins[4];
+  uint16_t _min[4];
+  uint16_t _max[4];
+  uint16_t _threshold[4];
 };
 
 LineSensor::LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4){
   _pins[0] = pin1; _pins[1] = pin2; _pins[2] = pin3; _pins[3] = pin4;
   int i;
   for(i=0;i<4;i++){
-    pinMode(_pins[i],INPUT);
+    _max[i] = 0;
+    _min[i] = 1023;
+    _threshold[i] = 950;
   }
 }
 
@@ -127,7 +133,7 @@ line_pos_t LineSensor::get_line(){
   int curLine[4];
   int tripCount=0, sum=0, i=0;
   for(;i<4;i++){
-    curLine[i] = (int)digitalRead(_pins[i]);
+    curLine[i] = (analogRead(_pins[i])<_threshold[i]);
     tripCount += curLine[i];
     curLine[i]*=(2*i-3);
     sum += curLine[i];
@@ -143,19 +149,33 @@ line_pos_t LineSensor::get_line(){
   }
 }
 
+void LineSensor::calibrate(){
+  int i;
+  unsigned long val;
+  for(i=0;i<4;i++){
+    val = analogRead(_pins[i]);
+    _max[i] = max(_max[i],val);
+    _min[i] = min(_min[i],val);
+    _threshold[i] = (_max[i]+_min[i])/2;
+  }
+}
 /*
  * Hardware definitions
  */
 
-AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,true);
-AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,true);
-AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,true);
-AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,true);
+//AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,false);
+//AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,false);
+//AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,false);
+//AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,false);
+AccelStepper m_topLeft(AccelStepper::HALF4WIRE,24,22,28,26,false);
+AccelStepper m_topRight(AccelStepper::HALF4WIRE,25,23,29,27,false);
+AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,34,32,38,36,false);
+AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,35,33,39,37,false);
 
-LineSensor lineTop(2,3,4,5);
-LineSensor lineRight(6,7,8,9);
-LineSensor lineBottom(42,44,46,48);
-LineSensor lineLeft(43,45,47,49);
+LineSensor lineTop(15,14,13,12);
+LineSensor lineRight(0,1,2,3);
+LineSensor lineBottom(7,6,5,4);
+LineSensor lineLeft(8,9,10,11);
 RF24 radio(9,10);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
@@ -201,6 +221,7 @@ game_state_t *g = &game;
 
 void init_radio(void);
 void init_motors(void);
+void init_light_sensors(void);
 void init_game(void);
 void update_game(void);
 void init_game_map(void);
@@ -212,6 +233,8 @@ bool collision_detect(heading_t h);
 void decide_direction(uint8_t options);
 void move_robot(void);
 void move_flag(void);
+void updateSpeed(AccelStepper *thisMotor,int newSpeed);
+
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t* expand(int *x,int *y, heading_t h);
@@ -241,6 +264,13 @@ void init_motors() {
   Timer1.attachInterrupt( move_flag );  // interrupt calls motion directly, setting flag
                                          // is alternate option
   
+}
+
+void init_light_sensors(){
+  lineTop.calibrate();
+  lineRight.calibrate();
+  lineBottom.calibrate();
+  lineLeft.calibrate();
 }
 
 
@@ -476,10 +506,14 @@ void move_robot() {
       lineBack = &lineRight;
       break;
     default : 
-      m_topLeft.setSpeed(0);
-      m_topRight.setSpeed(0);
-      m_bottomLeft.setSpeed(0);
-      m_bottomRight.setSpeed(0);
+      updateSpeed(m_frontRight,0);
+      updateSpeed(m_backLeft,0);
+      updateSpeed(m_frontLeft,0);
+      updateSpeed(m_backRight,0);
+      m_topLeft.disableOutputs();
+      m_topRight.disableOutputs();
+      m_bottomLeft.disableOutputs();
+      m_bottomRight.disableOutputs();
       currentHeading=globalHeading;
       return; //exit here
       break;
@@ -489,47 +523,53 @@ void move_robot() {
   line_pos_t readFront = lineFront->get_line();
   line_pos_t readBack = lineBack->get_line();
   if(currentHeading!=globalHeading){
+    if(currentHeading=='0'){
+      m_topLeft.enableOutputs();
+      m_topRight.enableOutputs();
+      m_bottomLeft.enableOutputs();
+      m_bottomRight.enableOutputs();
+    }
     currentHeading=globalHeading;
     if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
       //front pair of motors
       if(readFront==RIGHT){
-        m_frontLeft->setSpeed(M_SPEED+100);
-        m_frontRight->setSpeed(-(M_SPEED-100));
+        updateSpeed(m_frontLeft,M_SPEED);
+        updateSpeed(m_frontRight,0);
       } else if(readFront==LEFT){
-        m_frontLeft->setSpeed(M_SPEED-100);
-        m_frontRight->setSpeed(-(M_SPEED+100));
+        updateSpeed(m_frontLeft,0);
+        updateSpeed(m_frontRight,-M_SPEED);
       } else {
-        m_frontLeft->setSpeed(M_SPEED);
-        m_frontRight->setSpeed(-M_SPEED);
+        updateSpeed(m_frontLeft,M_SPEED);
+        updateSpeed(m_frontRight,-M_SPEED);
       }
-      //back pair of motors, opposite
+      //back pair of motors
       if(readBack==RIGHT){
-        m_backLeft->setSpeed(M_SPEED+100);
-        m_backRight->setSpeed(-(M_SPEED-100));
+        updateSpeed(m_backLeft,M_SPEED);
+        updateSpeed(m_backRight,0);
       } else if(readBack==LEFT){
-        m_backLeft->setSpeed(M_SPEED-100);
-        m_backRight->setSpeed(-(M_SPEED+100));
+        updateSpeed(m_backLeft,0);
+        updateSpeed(m_backRight,-M_SPEED);
       } else {
-        m_backLeft->setSpeed(M_SPEED);
-        m_backRight->setSpeed(M_SPEED);
+        updateSpeed(m_backLeft,M_SPEED);
+        updateSpeed(m_backRight,-M_SPEED);
       }
     } else { // one sensor must shift whole robot
       if(readFront==RIGHT||readBack==LEFT){
-        m_frontLeft->setSpeed(M_SPEED+100);
-        m_backRight->setSpeed(-(M_SPEED+100));
-        m_frontRight->setSpeed(-(M_SPEED-100));
-        m_backLeft->setSpeed(M_SPEED-100);
+        updateSpeed(m_frontLeft,M_SPEED);
+        updateSpeed(m_backRight,-M_SPEED);
+        updateSpeed(m_frontRight,0);
+        updateSpeed(m_backRight,0);
       } else if(readFront==LEFT||readBack==RIGHT){
-        m_frontRight->setSpeed(-(M_SPEED+100));
-        m_backLeft->setSpeed(M_SPEED+100);
-        m_frontLeft->setSpeed(M_SPEED-100);
-        m_backRight->setSpeed(-(M_SPEED-100));
+        updateSpeed(m_frontRight,-M_SPEED);
+        updateSpeed(m_backLeft,M_SPEED);
+        updateSpeed(m_frontLeft,0);
+        updateSpeed(m_backRight,0);
       } else {
         //lost the line
-        m_frontLeft->setSpeed(M_SPEED);
-        m_backLeft->setSpeed(M_SPEED);
-        m_frontRight->setSpeed(-M_SPEED);
-        m_backRight->setSpeed(-M_SPEED);
+        updateSpeed(m_frontLeft,M_SPEED);
+        updateSpeed(m_backLeft,M_SPEED);
+        updateSpeed(m_frontRight,-M_SPEED);
+        updateSpeed(m_backRight,-M_SPEED);
       }
     }
   }
@@ -537,6 +577,13 @@ void move_robot() {
   m_frontRight->runSpeed();
   m_backLeft->runSpeed();
   m_backRight->runSpeed();
+}
+
+void updateSpeed(AccelStepper *thisMotor,int newSpeed){
+  int speedVal = (int)thisMotor->speed();
+  if(speedVal!=newSpeed){
+    thisMotor->setSpeed(newSpeed);
+  }
 }
 
 /**    MAP NAVIGATION FUNCTIONS    **/
