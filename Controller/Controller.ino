@@ -41,14 +41,14 @@ typedef struct _game_state {
 #define HEADER 0xC8
 
 // Game commands
-#define NOP      0
-#define START    1
-#define STOP     2
-#define HIDE     3
-#define PAUSE    4
-#define RESUME   5 
-#define RUN_MODE 6
-#define MANUAL_OVERRIDE 7
+#define NOP             B0000000
+#define START           B0000001
+#define STOP            B0000010
+#define HIDE            B0000100
+#define PAUSE           B0001000
+#define RESUME          B0010000 
+#define MUSIC_COMMAND   B0100000
+#define MANUAL_OVERRIDE B1000000
 
 #define GAME_SIZE sizeof(game_state)
 
@@ -80,7 +80,7 @@ void broadcast_game(void);
  */
  // Only need a single pipe due to one-way comms.
 const uint64_t pipe = 0xF0F0F0F0E1LL;
-RF24 radio(9,10);
+RF24 radio(48,49);
 
 game_state game;
 uint8_t __space[21];
