@@ -16,16 +16,20 @@ GAME_SIZE       = 11;
 NOP             = 0;
 START           = 1;
 STOP            = 2;
-HIDE            = 3;
-PAUSE           = 4;
-RESUME          = 5;
-RUN_MODE        = 6;
-MANUAL_OVERRIDE = 7;
-% Override directions
+HIDE            = 4;
+PAUSE           = 8;
+RESUME          = 16;
+MUSIC_COMMAND   = 32;
+MANUAL_OVERRIDE = 64;
+% Override directives
+MUS_DEATH   = 64;
+MUS_VICTORY = 32;
+MUS_BEGIN   = 16;
 U = 8;
 R = 4;
 D = 2;
 L = 1;
+% NOTE: To combine functions you need to use bitor(val1, val2) (bitwise or)
 
 %% Create game structure
 % Print details of what serial comms. have been done

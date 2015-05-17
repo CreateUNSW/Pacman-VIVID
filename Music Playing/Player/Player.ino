@@ -40,9 +40,6 @@ const int waiter = 9;
 //Variables
 //-----------------------------------------------------------------------------------------------------
 
-//Variables
-byte track;
-
 //Functions
 SoftwareSerial matlab(11,12);
 MusicPlayer singlePlayer;
@@ -89,7 +86,7 @@ void loop(){
       wakaPlayer.opPlay();
       break;
     case 2:                                            //play victory song
-      waka.Player.opStop();
+      wakaPlayer.opStop();
       emptyPlaylist();
       singlePlayer.addToPlaylist("Inter.wav");
       singlePlayer.opPlay();
