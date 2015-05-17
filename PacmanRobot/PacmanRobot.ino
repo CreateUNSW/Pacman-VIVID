@@ -38,6 +38,8 @@
 
 #define GAME_SIZE sizeof(game_state_t)
 
+// Pacman death sequence code, must NOT conflict with music mask of broadcaster
+#define PAC_DEATH 0b10000000
 /*
  * Map definitions
  */
@@ -168,11 +170,11 @@ void LineSensor::calibrate(){
  // Which pin on the Arduino is connected to the NeoPixels?
 // On a Trinket or Gemma we suggest changing this to 1
 #define LED_STRIP_PIN            43
-// eyes connected to pins 42,44,46,48
-#define EYE_LL  42
-#define EYE_LR  44
-#define EYE_RL  46
-#define EYE_RR  48
+// eyes connected to pins 40,42,44,46
+#define EYE_LL  40
+#define EYE_LR  42
+#define EYE_RL  44
+#define EYE_RR  46
 
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      20// (max for Pacman?)
@@ -187,7 +189,7 @@ LineSensor lineTop(15,14,13,12);
 LineSensor lineRight(0,1,2,3);
 LineSensor lineBottom(7,6,5,4);
 LineSensor lineLeft(8,9,10,11);
-RF24 radio(9,10);
+RF24 radio(48,49);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
 
@@ -222,8 +224,9 @@ heading_t currentHeading = '0';
 game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
 uint8_t __space[21];
-// Pointer to be used when updating game from radio
-game_state_t *g = &game;
+
+// Initialise the robots as stopped
+int curr_command = STOP;
 
 
 /*
@@ -340,18 +343,6 @@ void init_game() {
     case PACMAN : thisRobot = &game.pac; break;    
     default  : thisRobot = &game.g[playerSelect-1]; break;
   }
-  while (game.command != START) {
-    //Serial.println(game.command);
-    update_game();
-    // Don't trust start command with faulty checksum
-    if (game.header != checksum()) {
-       game.command == STOP; 
-    }
-    print_game();
-    //Serial.println("Will the game ever start?");
-    //delay(300);
-  }
-  Serial.println("The game has begun!");
 }
 
 void setup() {
@@ -359,78 +350,92 @@ void setup() {
   Serial.begin(57600);
   Serial.println("Starting run...");
   init_motors();
-  //pinMode(4,OUTPUT);
   //init_radio();
   //randomSeed(micros());
-  //Serial.println(GAME_SIZE);
-  //init_game(); 
-  
+
 }
 
 /**    MAIN FUNCTIONS    **/
 int i = 0;
+int manual_override_counter = 0;
+// A simple count to "hold" a person's input
+// NOTE: This simply prevents the return from manual control to AI driven for a period of time, the
+//       game is still updated normally, including if the person changes their input
+#define MANUAL_OVERRIDE_THRESHOLD 1000
 void loop() {
-  // put your main code here, to run repeatedly:
-  /*while (1) {
-    update_game();
-    if (Serial.available()) {
-      while (Serial.available()) {
-        Serial.read();
-      }
-      i = 0;
-      Serial.println("Reset count");
-    }
-    if (game.header == checksum()) {
-      Serial.print("Received packets = ");
-      Serial.println(++i);
-      print_game();
-      //delay(100); 
-    } 
-    if (game.command & MANUAL_OVERRIDE == MANUAL_OVERRIDE) {
-       Serial.println("Received instruction..."); 
-       game.command = NOP;
-       Serial.print("Dir: ");
-       switch(game.override_dir) {
-         case U:
-           Serial.println('U');
-           break;
-         case D:
-           Serial.println('D');
-           break;
-         case L:
-           Serial.println('L');
-           break;
-         case R:
-           Serial.println('R');
-           break;   
-       }
-       Serial.println("Processed instruction.");   
-    }
-  }*/
-  
-  // If header is wrong, return to receive update again
-  /*if (game.header != checksum()) {
-    Serial.println("ERR: Checksum invalid");
-    print_game();
-    return;
-  } else {
-    Serial.println("Checksum passed");
+  update_game();
+  // Whilst the last manual_override is in effect, don't update the current command
+  if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
+    // Once threshold reached, return to standard play (w/ AI)
+    manual_override_counter = 0;
+    curr_command = NOP;
   }
-  switch(game.command) {
-    case STOP  : break; //Do something
-    case PAUSE : break; //Do something
-    case RESUME: break; //Do something
-    case HIDE  : break; //Do something
-    default    : break; //Do nothing 
-  }*/
-  /*Serial.print("Welcome player ");
-  Serial.println(PLAYER_STRING);
-  int i;
-  for(i=0;i<NUM_GHOSTS;i++){
-    Serial.print("Please enter ghost ");
-    Serial.println(i+1);
-    enter_robot_location(&game.g[i]);
-  }*/
+  // Make sure the game header is consistent with the checksum 
+  if (game.header == checksum()) {
+    // This section updates all relevant variables from the received RF packet
+    switch(game.command) {
+      case NOP   : // No special operation, run game as normal
+        // Do not permit normal operations if manual override, pause or stop are in effect
+        if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) 
+          break;
+          
+        curr_command = NOP;
+        break;
+      case START : // Begin the game from the initial position after the end of a game
+        // Turn on all robots, ghosts must cascade out of middle section
+        // Return to normal play
+        // NOTE: Not sure if you want to do special motor control stuff using the START command
+        //       if so, just change this to START and add a case to the very next switch statement
+        curr_command = NOP;
+        break;
+      case STOP  : // To be sent when the game is over
+        if (game.override_dir & PAC_DEATH == PAC_DEATH) {
+            // Call pacman death sequence
+        }
+        // Turn off all robots
+        // Remain stopped
+        curr_command = STOP;
+        break; 
+      case PAUSE : // Pause the game temporarily
+        // Prevents sneaky resume of gameplay (STOP -> PAUSE -> RESUME, would be valid otherwise)
+        if (curr_command == STOP)
+          break;
+        // Turn off all robot's motors, probably not the lights
+        // Remain paused until resume issued
+        curr_command = PAUSE;
+        break;
+      case RESUME:  // Resume from a pause
+        // Turn on all robot's motors
+        // CANNOT resume from a stop
+        if (curr_command == STOP)
+          break;
+        // Return to normal play
+        curr_command = NOP;
+        break;
+      case MANUAL_OVERRIDE  :
+        // Can't control while paused or stopped.
+        if (curr_command == STOP || curr_command == PAUSE)
+          break;
+        // Can't manually control ghosts
+        if (playerSelect != PACMAN)
+          break;
+        curr_command = MANUAL_OVERRIDE;
+        
+      default    : break; //Do nothing 
+    }
+  } 
+  
+  // The meat of controlling the motors + line_sensing will be done here
+  
+  switch(curr_command) {
+    case NOP             : /*Execute normal AI control functions*/ break;
+    case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
+    case PAUSE           : /*Continue to the next case...*/
+    case STOP            : /*If button pressed, change player*/ break;
+    default              : /*PAUSE, STOP, START*/ break;
+  }
+  
+  
   //map_expand();
   //collision_detect();
   if(Serial.available()){
@@ -458,13 +463,11 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    //Serial.println("Data available");
-    //digitalWrite(4,HIGH);
     radio.read((char *)&game,GAME_SIZE);
     delay(1);
   } else {
+    // Not achievable with checksum()
     game.header = -1;
-    //digitalWrite(4,LOW);
   }
 }
 
@@ -472,7 +475,7 @@ uint8_t checksum() {
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
-        sum += (((char *)g)[i] & (1 << j)) >> j;
+        sum += (((char *)&game)[i] & (1 << j)) >> j;
      }
   }
   return sum;
