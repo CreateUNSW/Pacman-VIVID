@@ -16,22 +16,25 @@ GAME_SIZE       = 11;
 NOP             = 0;
 START           = 1;
 STOP            = 2;
-HIDE            = 3;
-PAUSE           = 4;
-RESUME          = 5;
-RUN_MODE        = 6;
-MANUAL_OVERRIDE = 7;
-% Override directions
+HIDE            = 4;
+PAUSE           = 8;
+RESUME          = 16;
+MUSIC_COMMAND   = 32;
+MANUAL_OVERRIDE = 64;
+% Override directives
+MUS_DEATH   = 64;
+MUS_VICTORY = 32;
+MUS_BEGIN   = 16;
 U = 8;
 R = 4;
 D = 2;
 L = 1;
-
+% Note: Use bitor to compose two commands/directives. e.g. bitor(val1,val2)
 %% Create game structure
 % Print details of what serial comms. have been done
 game(1).header       = 1;
-game(1).command      = 0;
-game(1).override_dir = 1;
+game(1).command      = bitor(START, MUSIC_COMMAND);
+game(1).override_dir = MUS_BEGIN;
 game(1).pacman       = struct('position', {}, 'heading', {});
 game(1).g            = struct('position', {}, 'heading', {});
 game(2).g            = struct('position', {}, 'heading', {});
@@ -53,7 +56,6 @@ game(3).g(1).heading  = R;
 % game(x).g.[position or heading] = y; Where x is the ghost you want.
 % All other references will be to game(1).header -- for example
  
-
 %% Activate serial communications defined by serial argument s
 
 
