@@ -174,6 +174,11 @@ void LineSensor::calibrate(){
 #define EYE_RL  46
 #define EYE_RR  48
 
+uint8_t rgb[3];
+
+const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7,17,18,19}};
+// top, right, bottom, left region
+
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      20// (max for Pacman?)
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
@@ -218,6 +223,8 @@ robot_t *thisRobot;
 position_t goal;
 heading_t globalHeading = '0';
 heading_t currentHeading = '0';
+unsigned long aiTime = 0;
+bool animationToggle = 0;
 
 game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
@@ -238,23 +245,29 @@ void init_game(void);
 void update_game(void);
 void init_game_map(void);
 void print_game(void);
-void map_expand(void);
-bool is_intersection(int x, int y);
-bool is_open(int x, int y, heading_t dir);
-bool collision_detect(heading_t h);
-void decide_direction(uint8_t options);
+
+
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
 void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
 void line_follow(void);
 
+void ghost_animation(void);
+void pac_animation(void);
 
+void set_goal(void);
+void map_expand(void);
+bool is_intersection(int x, int y);
+bool is_open(int x, int y, heading_t dir);
+bool collision_detect(heading_t h);
+void decide_direction(uint8_t options);
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t* expand(int *x,int *y, heading_t h);
 uint8_t* expand_single(int *x,int *y,heading_t h);
 uint8_t heading2binary(heading_t h);
 void enter_robot_location(robot_t * entry);
+void calc_new_square(int *x,int*y,heading_t h,int d);
 
 /**    SET UP   **/
 
@@ -299,7 +312,6 @@ void init_LEDs(){
 }
 
 void player_LEDs(){
-  uint8_t rgb[3];
   switch(playerSelect){
     case PACMAN :
       rgb[0] = 200;
@@ -333,6 +345,71 @@ void player_LEDs(){
   
 }
 
+void pac_animation(){
+  uint8_t pacLEDsegment;
+  int i;
+  for(i=0;i<20;i++){
+    pixels.setPixelColor(i, pixels.Color(rgb[0],rgb[1],rgb[2]));
+  }
+  if(animationToggle==0){
+    animationToggle = 1;
+  } else {
+    animationToggle = 0;
+    switch(globalHeading){
+      case 'u':
+        pacLEDsegment = 0;
+        break;
+      case 'r':
+        pacLEDsegment = 1;
+        break;
+      case 'd':
+        pacLEDsegment = 2;
+        break;
+      case 'l':
+        pacLEDsegment = 3;
+        break;
+      default:
+        pixels.show();
+        return;
+        break;
+    }
+    for(i=0;i<5;i++){
+      pixels.setPixelColor(pacStrip[pacLEDsegment][i],0,0,0);
+    }
+  }
+  pixels.show();
+}
+              
+void ghost_animation(){
+  heading_t ledHeading = globalHeading;
+  if(ledHeading=='u'||ledHeading=='d'){
+    if(animationToggle==0){
+      animationToggle = 1;
+      ledHeading='r';
+    } else {
+      animationToggle = 0;
+      ledHeading='l';
+    }
+  }
+  if(ledHeading=='r'){
+    digitalWrite(EYE_LR,HIGH);
+    digitalWrite(EYE_RR,HIGH);
+    digitalWrite(EYE_LL,LOW);
+    digitalWrite(EYE_RL,LOW);
+  } else if(ledHeading=='l'){
+    digitalWrite(EYE_LL,HIGH);
+    digitalWrite(EYE_RL,HIGH);
+    digitalWrite(EYE_LR,LOW);
+    digitalWrite(EYE_RR,LOW);
+  } else {
+    digitalWrite(EYE_LR,HIGH);
+    digitalWrite(EYE_RL,HIGH);
+    digitalWrite(EYE_LL,LOW);
+    digitalWrite(EYE_RR,LOW);
+  }
+}
+  
+
 // Initialises the game and waits for the host to send start command
 void init_game() {
   // To be replaced with LCD display and button toggling!
@@ -361,7 +438,7 @@ void setup() {
   init_motors();
   //pinMode(4,OUTPUT);
   //init_radio();
-  //randomSeed(micros());
+  randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game(); 
   
@@ -624,14 +701,67 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
 }
 
 /**    MAP NAVIGATION FUNCTIONS    **/
+void set_goal(){
+  switch(playerSelect){
+    case PACMAN:
+       break;
+    case GHOST1:
+      if(aiTime-millis()<15000){
+        goal.x = 1;
+        goal.y = 1;
+      } else if(aiTime-millis()<35000){
+        goal.x = g->pac.p.x;
+        goal.y = g->pac.p.y;
+      } else {
+        aiTime = millis();
+      }
+      break;
+    case GHOST2:
+      if(aiTime-millis()<15000){
+        goal.x = 9;
+        goal.y = 9;
+      } else if(aiTime-millis()<35000){
+        goal.x = g->pac.p.x;
+        goal.y = g->pac.p.y;
+        int newX = goal.x;
+        int newY = goal.y;
+        calc_new_square(&newX,&newY,g->pac.h,5);
+        map_constrain(&newX,&newY);
+        goal.x = newX;
+        goal.y = newY;
+      } else {
+        aiTime = millis();
+      }
+      break;
+    case GHOST3:
+      if(aiTime-millis()<15000){
+        goal.x = 9;
+        goal.y = 1;
+      } else if(aiTime-millis()<35000){
+        goal.x = random(1,9);
+        goal.y = random(1,9);
+      } else {
+        aiTime = millis();
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+
+void map_constrain(int *x,int *y){
+  *x = constrain(*x,1,9);
+  *y = constrain(*y,1,9);
+}
 
 uint8_t* check_square(int x,int y){
   robot_t *r = NULL;
   if(x<1||x>9||y<1||y>9){
     r = NULL;
-  }/* else if (game.pac.p.x==x&&game.pac.p.y==y){
+  } else if (game.pac.p.x==x&&game.pac.p.y==y){
     r = &game.pac;
-  } */ // probably shouldn't consider pacman's location
+  }  // probably shouldn't consider pacman's location
   else {
     int i;
     for(i=0;i<NUM_GHOSTS;i++){
@@ -672,11 +802,10 @@ bool collision_detect(heading_t h){
   int xDest = thisRobot->p.x;
   int yDest = thisRobot->p.y;
   if (is_intersection(xDest,yDest)){
-    uint8_t testDir = heading2binary(h);
+    
     // force look at the next intersection
     if(is_open(xDest,yDest,h)){
-      xDest = xDest + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
-      yDest = yDest + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+      calc_new_square(&xDest,&yDest,h,1);
     }
   }
   expand_single(&xDest,&yDest,h);
@@ -721,7 +850,7 @@ bool collision_detect(heading_t h){
 }
 
 void decide_direction(uint8_t options){
-  heading_t newHeading;
+  //heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
   float angle;
@@ -779,9 +908,11 @@ void decide_direction(uint8_t options){
     i++;
   }
   if(i==4){
-    newHeading = '0';
+    //newHeading = '0';
+    globalHeading = '0'
   } else {
-    newHeading = directionList[i];
+    //newHeading = directionList[i];
+    globalHeading = directionList[i];
   }  
 }
   
@@ -798,7 +929,7 @@ void map_expand(){
     r = expand(&tempX,&tempY,'u');
     if(r==NULL) {
       if(!collision_detect('u')){
-        Serial.println("Up path available");
+        //Serial.println("Up path available");
         options|=U;
       }
     }
@@ -808,7 +939,7 @@ void map_expand(){
     r = expand(&tempX,&tempY,'r');
     if(r==NULL) {
       if(!collision_detect('r')){
-        Serial.println("Right path available");
+        //Serial.println("Right path available");
         options|=R;
       }
     }
@@ -852,10 +983,8 @@ uint8_t* expand(int *x,int *y, heading_t h){
   } else if(!is_intersection(*x,*y)){
     // Start potentially redundant code
     // Checks to expand along direction robot is heading first
-    uint8_t testDir = heading2binary(h);
     if(is_open(*x,*y,h)){
-      *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
-      *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+      calc_new_square(x,y,h,1);
       r = expand(x,y,h);
     } // end potentially redundant code 
     else if(is_open(*x,*y,'u')&&h!='d'){
@@ -884,10 +1013,8 @@ uint8_t* expand_single(int *x,int *y,heading_t h){
   if(!is_intersection(*x,*y)){
     // Start potentially redundant code
     // Checks to expand along direction robot is heading first
-    uint8_t testDir = heading2binary(h);
     if(is_open(*x,*y,h)){
-      *x = *x + ((xx&testDir&addDir)>0) - ((xx&testDir&subDir)>0);
-      *y = *y + ((yy&testDir&addDir)>0) - ((yy&testDir&subDir)>0);
+      calc_new_square(x,y,h,1);
       r = check_square(*x,*y);
     } // end potentially redundant code 
     else if(is_open(*x,*y,'u')&&h!='d'){
@@ -904,8 +1031,18 @@ uint8_t* expand_single(int *x,int *y,heading_t h){
       r = check_square(*x,*y);
     }
   }
+  if(r==(uint8_t*)&game.pac){
+    r=NULL;
+  }
   return r;
 }
+
+void calc_new_square(int *x,int*y,heading_t h,int d){
+  uint8_t dir = heading2binary(h);
+  *x = *x + ((xx&dir&addDir)>0)*d - ((xx&dir&subDir)>0)*d;
+  *y = *y + ((yy&dir&addDir)>0)*d - ((yy&dir&subDir)>0)*d;
+}
+  
 
 uint8_t heading2binary(heading_t h){
   uint8_t ret;
