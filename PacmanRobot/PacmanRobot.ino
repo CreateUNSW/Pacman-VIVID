@@ -7,6 +7,8 @@
 #include <SPI.h>
 #include <AccelStepper.h>
 #include "RF24.h"
+#include <Adafruit_NeoPixel.h>
+#include <avr/power.h>
 
 /* note: data types and variables have been grouped together for ease of reading.
    This leads to inefficient allocation of memory space, but for now we have plenty.
@@ -162,11 +164,20 @@ void LineSensor::calibrate(){
 /*
  * Hardware definitions
  */
+ 
+ // Which pin on the Arduino is connected to the NeoPixels?
+// On a Trinket or Gemma we suggest changing this to 1
+#define LED_STRIP_PIN            43
+// eyes connected to pins 42,44,46,48
+#define EYE_LL  42
+#define EYE_LR  44
+#define EYE_RL  46
+#define EYE_RR  48
 
-//AccelStepper m_topLeft(AccelStepper::HALF4WIRE,22,24,26,28,false);
-//AccelStepper m_topRight(AccelStepper::HALF4WIRE,23,25,27,29,false);
-//AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,32,34,36,38,false);
-//AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,33,35,37,39,false);
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS      20// (max for Pacman?)
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
+
 AccelStepper m_topLeft(AccelStepper::HALF4WIRE,24,22,28,26,false);
 AccelStepper m_topRight(AccelStepper::HALF4WIRE,25,23,29,27,false);
 AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,34,32,38,36,false);
@@ -222,6 +233,7 @@ game_state_t *g = &game;
 void init_radio(void);
 void init_motors(void);
 void init_light_sensors(void);
+void init_LEDs(void);
 void init_game(void);
 void update_game(void);
 void init_game_map(void);
@@ -234,6 +246,8 @@ void decide_direction(uint8_t options);
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
+void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
+void line_follow(void);
 
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
@@ -261,9 +275,7 @@ void init_motors() {
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
   Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
-  Timer1.attachInterrupt( move_flag );  // interrupt calls motion directly, setting flag
-                                         // is alternate option
-  
+  Timer1.attachInterrupt( move_flag );  // interrupt sets motion flag
 }
 
 void init_light_sensors(){
@@ -273,6 +285,53 @@ void init_light_sensors(){
   lineLeft.calibrate();
 }
 
+void init_LEDs(){
+  pixels.begin();
+  pinMode(EYE_LL,OUTPUT);
+  pinMode(EYE_LR,OUTPUT);
+  pinMode(EYE_RL,OUTPUT);
+  pinMode(EYE_RR,OUTPUT);
+  int i;
+  for(i=0;i<NUMPIXELS;i++){
+     pixels.setPixelColor(i, pixels.Color(0,0,0));
+  }
+  pixels.show();
+}
+
+void player_LEDs(){
+  uint8_t rgb[3];
+  switch(playerSelect){
+    case PACMAN :
+      rgb[0] = 200;
+      rgb[1] = 200;
+      rgb[2] = 0;
+      break;
+    case GHOST1 :
+      rgb[0] = 200;
+      rgb[1] = 0;
+      rgb[2] = 0;
+      break;
+    case GHOST2 :
+      rgb[0] = 0;
+      rgb[1] = 0;
+      rgb[2] = 200;
+      break;
+    case GHOST3 :
+      rgb[0] = 150;
+      rgb[1] = 60;
+      rgb[2] = 60;
+      break;
+    default :
+      return;
+      break;
+  }
+  int i;
+  for(i=0;i<NUMPIXELS;i++){
+     pixels.setPixelColor(i, pixels.Color(rgb[0],rgb[1],rgb[2]));
+  }
+  pixels.show();
+  
+}
 
 // Initialises the game and waits for the host to send start command
 void init_game() {
@@ -427,11 +486,7 @@ bool detect_intersection() {
   return true;
 }
 
-void move_flag(){
-  moveFlag = 1;
-}
-
-void move_robot() {
+void line_follow(){
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -439,113 +494,126 @@ void move_robot() {
   AccelStepper *m_backRight;
   LineSensor *lineFront;
   LineSensor *lineBack;
-  uint8_t directions[4];
-  switch(globalHeading){
-    case 'u' :
-      m_frontLeft = &m_topLeft;
-      m_frontRight = &m_topRight;
-      m_backLeft = &m_bottomLeft;
-      m_backRight = &m_bottomRight;
-      lineFront = &lineTop;
-      lineBack = &lineBottom;
-      break;
-    case 'r' :
-      m_frontLeft = &m_topRight;
-      m_frontRight = &m_bottomRight;
-      m_backLeft = &m_topLeft;
-      m_backRight = &m_bottomLeft;
-      lineFront = &lineRight;
-      lineBack = &lineLeft;
-      break;
-    case 'd' :
-      //uint8_t temp = {
-      m_frontLeft = &m_bottomRight;
-      m_frontRight = &m_bottomLeft;
-      m_backLeft = &m_topRight;
-      m_backRight = &m_topLeft;
-      lineFront = &lineBottom;
-      lineBack = &lineTop;
-      break;
-    case 'l' :
-      m_frontLeft = &m_bottomLeft;
-      m_frontRight = &m_topLeft;
-      m_backLeft = &m_bottomRight;
-      m_backRight = &m_topRight;
-      lineFront = &lineLeft;
-      lineBack = &lineRight;
-      break;
-    default : 
-      updateSpeed(m_frontRight,0);
-      updateSpeed(m_backLeft,0);
-      updateSpeed(m_frontLeft,0);
-      updateSpeed(m_backRight,0);
-      m_topLeft.disableOutputs();
-      m_topRight.disableOutputs();
-      m_bottomLeft.disableOutputs();
-      m_bottomRight.disableOutputs();
-      currentHeading=globalHeading;
-      return; //exit here
-      break;
-  }
-  // Will need to set speed based on relative line positioning.
-  // Need to investigate whether rapid polling of set speed causes problems.
+  get_alignment(lineFront,lineBack,m_frontLeft,m_frontRight,m_backLeft,m_backRight);
   line_pos_t readFront = lineFront->get_line();
   line_pos_t readBack = lineBack->get_line();
+  if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
+    //front pair of motors
+    if(readFront==RIGHT){
+      updateSpeed(m_frontLeft,M_SPEED);
+      updateSpeed(m_frontRight,0);
+    } else if(readFront==LEFT){
+      updateSpeed(m_frontLeft,0);
+      updateSpeed(m_frontRight,-M_SPEED);
+    } else {
+      updateSpeed(m_frontLeft,M_SPEED);
+      updateSpeed(m_frontRight,-M_SPEED);
+    }
+    //back pair of motors
+    if(readBack==RIGHT){
+      updateSpeed(m_backLeft,M_SPEED);
+      updateSpeed(m_backRight,0);
+    } else if(readBack==LEFT){
+      updateSpeed(m_backLeft,0);
+      updateSpeed(m_backRight,-M_SPEED);
+    } else {
+      updateSpeed(m_backLeft,M_SPEED);
+      updateSpeed(m_backRight,-M_SPEED);
+    }
+  } else { // one sensor must shift whole robot
+    if(readFront==RIGHT||readBack==LEFT){
+      updateSpeed(m_frontLeft,M_SPEED);
+      updateSpeed(m_backRight,-M_SPEED);
+      updateSpeed(m_frontRight,0);
+      updateSpeed(m_backRight,0);
+    } else if(readFront==LEFT||readBack==RIGHT){
+      updateSpeed(m_frontRight,-M_SPEED);
+      updateSpeed(m_backLeft,M_SPEED);
+      updateSpeed(m_frontLeft,0);
+      updateSpeed(m_backRight,0);
+    } else {
+      //lost the line
+      updateSpeed(m_frontLeft,M_SPEED);
+      updateSpeed(m_backLeft,M_SPEED);
+      updateSpeed(m_frontRight,-M_SPEED);
+      updateSpeed(m_backRight,-M_SPEED);
+    }
+  }
+}
+
+void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR){
+  // global heading must have motor direction first
+  switch(globalHeading){
+    case 'u' :
+      m_fL = &m_topLeft;
+      m_fR = &m_topRight;
+      m_bL = &m_bottomLeft;
+      m_bR = &m_bottomRight;
+      l_F = &lineTop;
+      l_B = &lineBottom;
+      break;
+    case 'r' :
+      m_fL = &m_topRight;
+      m_fR = &m_bottomRight;
+      m_bL = &m_topLeft;
+      m_bR = &m_bottomLeft;
+      l_F = &lineRight;
+      l_B = &lineLeft;
+      break;
+    case 'd' :
+      m_fL = &m_bottomRight;
+      m_fR = &m_bottomLeft;
+      m_bL = &m_topRight;
+      m_bR = &m_topLeft;
+      l_F = &lineBottom;
+      l_B = &lineTop;
+      break;
+    case 'l' :
+      m_fL = &m_bottomLeft;
+      m_fR = &m_topLeft;
+      m_bL = &m_bottomRight;
+      m_bR = &m_topRight;
+      l_F = &lineLeft;
+      l_B = &lineRight;
+      break;
+    default : 
+      m_fL = &m_topLeft;
+      m_fR = &m_topRight;
+      m_bL = &m_bottomLeft;
+      m_bR = &m_bottomRight;
+      l_F = &lineTop;
+      l_B = &lineBottom;
+      break;
+  }
+}
+
+void move_flag(){
+  moveFlag = 1;
+}
+
+void move_robot() {
   if(currentHeading!=globalHeading){
     if(currentHeading=='0'){
       m_topLeft.enableOutputs();
       m_topRight.enableOutputs();
       m_bottomLeft.enableOutputs();
       m_bottomRight.enableOutputs();
+    } else if(globalHeading=='0'){
+      updateSpeed(&m_topLeft,0);
+      updateSpeed(&m_topRight,0);
+      updateSpeed(&m_bottomLeft,0);
+      updateSpeed(&m_bottomRight,0);
+      m_topLeft.disableOutputs();
+      m_topRight.disableOutputs();
+      m_bottomLeft.disableOutputs();
+      m_bottomRight.disableOutputs();
     }
     currentHeading=globalHeading;
-    if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
-      //front pair of motors
-      if(readFront==RIGHT){
-        updateSpeed(m_frontLeft,M_SPEED);
-        updateSpeed(m_frontRight,0);
-      } else if(readFront==LEFT){
-        updateSpeed(m_frontLeft,0);
-        updateSpeed(m_frontRight,-M_SPEED);
-      } else {
-        updateSpeed(m_frontLeft,M_SPEED);
-        updateSpeed(m_frontRight,-M_SPEED);
-      }
-      //back pair of motors
-      if(readBack==RIGHT){
-        updateSpeed(m_backLeft,M_SPEED);
-        updateSpeed(m_backRight,0);
-      } else if(readBack==LEFT){
-        updateSpeed(m_backLeft,0);
-        updateSpeed(m_backRight,-M_SPEED);
-      } else {
-        updateSpeed(m_backLeft,M_SPEED);
-        updateSpeed(m_backRight,-M_SPEED);
-      }
-    } else { // one sensor must shift whole robot
-      if(readFront==RIGHT||readBack==LEFT){
-        updateSpeed(m_frontLeft,M_SPEED);
-        updateSpeed(m_backRight,-M_SPEED);
-        updateSpeed(m_frontRight,0);
-        updateSpeed(m_backRight,0);
-      } else if(readFront==LEFT||readBack==RIGHT){
-        updateSpeed(m_frontRight,-M_SPEED);
-        updateSpeed(m_backLeft,M_SPEED);
-        updateSpeed(m_frontLeft,0);
-        updateSpeed(m_backRight,0);
-      } else {
-        //lost the line
-        updateSpeed(m_frontLeft,M_SPEED);
-        updateSpeed(m_backLeft,M_SPEED);
-        updateSpeed(m_frontRight,-M_SPEED);
-        updateSpeed(m_backRight,-M_SPEED);
-      }
-    }
   }
-  m_frontLeft->runSpeed();
-  m_frontRight->runSpeed();
-  m_backLeft->runSpeed();
-  m_backRight->runSpeed();
+  m_topLeft.runSpeed();
+  m_topRight.runSpeed();
+  m_bottomLeft.runSpeed();
+  m_bottomRight.runSpeed();
 }
 
 void updateSpeed(AccelStepper *thisMotor,int newSpeed){
