@@ -80,7 +80,7 @@ void showMap() {
   for (int i = 0; i < TOTALSTRIPS; i++) {
     for (int j = 0; j < TOTALLEDS; j++) {
       if (j % SPACING == 0) {  
-        dots[i].setPixelColor(j, dots[i].Color(50,50,50));
+        dots[i].setPixelColor(j, dots[i].Color(255,255,255));
       }
       dots[i].show();
     }
