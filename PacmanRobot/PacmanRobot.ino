@@ -25,14 +25,14 @@
 #define HEADER 0xC8
 
 // Game commands
-#define NOP      0
-#define START    1
-#define STOP     2
-#define HIDE     3
-#define PAUSE    4
-#define RESUME   5 
-#define RUN_MODE 6
-#define MANUAL_OVERRIDE 7
+#define NOP             B0000000
+#define START           B0000001
+#define STOP            B0000010
+#define HIDE            B0000100
+#define PAUSE           B0001000
+#define RESUME          B0010000 
+#define MUSIC_COMMAND   B0100000
+#define MANUAL_OVERRIDE B1000000
 
 #define GAME_SIZE sizeof(game_state_t)
 
@@ -326,8 +326,8 @@ void loop() {
       Serial.println(++i);
       print_game();
       //delay(100); 
-    }
-    if (game.command == MANUAL_OVERRIDE) {
+    } 
+    if (game.command & MANUAL_OVERRIDE == MANUAL_OVERRIDE) {
        Serial.println("Received instruction..."); 
        game.command = NOP;
        Serial.print("Dir: ");
@@ -385,37 +385,6 @@ void loop() {
 
 void print_game() {
    int i;
-   /*
-   Serial.print("game.header = ");
-   Serial.println(game.header);
-   Serial.print("game.command = ");
-   Serial.println(game.command);
-   Serial.print("game.override_dir = ");
-   Serial.println(game.override_dir);
-   
-   Serial.print("game.pac.x  = ");
-   Serial.print(game.pac.p.x);
-   Serial.print(" game.pac.y  = ");
-   Serial.print(game.pac.p.y);
-   Serial.print(" game.pac.heading  = ");
-   Serial.println(game.pac.h);
-   
-    for (i = 0; i < NUM_GHOSTS; i++) {
-       Serial.print("game.g[");
-       Serial.print(i);
-       Serial.print("].x = ");
-       Serial.print(game.g[i].p.x);  
-       Serial.print(" game.g[");
-       Serial.print(i);
-       Serial.print("].y = ");
-       Serial.print(game.g[i].p.y);
-       Serial.print(" game.g[");
-       Serial.print(i);
-       Serial.print("].heading = ");
-       Serial.println(game.g[i].h);
-    }
-   */
-
    for (i = 0; i < GAME_SIZE; i++) {
       Serial.print("Byte \0");
       Serial.print(i);
