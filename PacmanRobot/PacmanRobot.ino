@@ -176,11 +176,11 @@ void LineSensor::calibrate(){
  // Which pin on the Arduino is connected to the NeoPixels?
 // On a Trinket or Gemma we suggest changing this to 1
 #define LED_STRIP_PIN            43
-// eyes connected to pins 40,42,44,46
-#define EYE_LL  40
-#define EYE_LR  42
-#define EYE_RL  44
-#define EYE_RR  46
+// eyes connected to pins 42,44,46,48
+#define EYE_LL  42
+#define EYE_LR  44
+#define EYE_RL  46
+#define EYE_RR  48
 
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      20// (max for Pacman?)
@@ -195,7 +195,7 @@ LineSensor lineTop(15,14,13,12);
 LineSensor lineRight(0,1,2,3);
 LineSensor lineBottom(7,6,5,4);
 LineSensor lineLeft(8,9,10,11);
-RF24 radio(48,49);
+RF24 radio(49,53);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
 
@@ -257,7 +257,8 @@ void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
 void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
 void line_follow(void);
-
+void set_checksum(void);
+uint8_t checksum(void);
 
 uint8_t* check_square(int x, int y); //SILLY that it has to be uint8_t*! BUT ARDUINO WON'T COMPILE OTHERWISE!!
 uint8_t* expand(int *x,int *y, heading_t h);
@@ -523,8 +524,19 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    radio.read((char *)&game,GAME_SIZE);
-    delay(1);
+    game_state_t game_buf;
+    radio.read((char *)&game_buf,GAME_SIZE);
+    if (game_buf.header == checksum() & game.command == MANUAL_OVERRIDE) {
+       game.command = MANUAL_OVERRIDE;
+       game.override_dir = game_buf.override_dir;
+       // Do NOT overwrite current pac and ghost locations and headings
+       // A REALLY dodgy way to keep the game consistent, because the controller
+       // doesn't have robot information
+       set_checksum();
+    } else if (game_buf.header == checksum()) {
+      // For normal game update, 
+      game = game_buf;
+    }
   } else {
     // Not achievable with checksum()
     game.header = -1;
@@ -539,6 +551,16 @@ uint8_t checksum() {
      }
   }
   return sum;
+}
+
+void set_checksum() {
+  uint8_t i, j, sum = 0;
+  for (i = 1; i < GAME_SIZE; i++) {
+     for (j = 0; j < 8; j++) {
+        sum += (((char *)&game)[i] & (1 << j)) >> j;
+     }
+  }
+  game.header = sum;
 }
 
 /**    MOVEMENT FUNCTIONS    **/
