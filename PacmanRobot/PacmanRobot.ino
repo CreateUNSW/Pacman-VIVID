@@ -1,3 +1,9 @@
+#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+#define DEBUG_LIN  // Debug messages related to line following and sensors
+#define DEBUG_MOT  // Debug messages related to motor control
+#define DEBUG_AI   // Debug messages related to AI decisions
+#define DEBUG_MAN  // Debug messages related to manual control decisions
+  
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -369,6 +375,9 @@ void loop() {
     // Once threshold reached, return to standard play (w/ AI)
     manual_override_counter = 0;
     curr_command = NOP;
+    #ifdef DEBUG_RF
+      Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
+    #endif
   }
   // Make sure the game header is consistent with the checksum 
   if (game.header == checksum()) {
@@ -376,30 +385,60 @@ void loop() {
     switch(game.command) {
       case NOP   : // No special operation, run game as normal
         // Do not permit normal operations if manual override, pause or stop are in effect
-        if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) 
+        if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) { 
+          #ifdef DEBUG_RF
+            Serial.println("RF: NOP UNAVAILABLE");
+          #endif
           break;
-          
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: NOP ISSUED");
+        #endif
         curr_command = NOP;
         break;
       case START : // Begin the game from the initial position after the end of a game
+        // Cannot start game unless robots are in the STOP state. (STOP can be issued at any time)
+        if (curr_command != STOP) {
+           #ifdef DEBUG_RF
+             Serial.println("RF: START UNAVAILABLE");
+           #endif
+           break; 
+        }
         // Turn on all robots, ghosts must cascade out of middle section
         // Return to normal play
         // NOTE: Not sure if you want to do special motor control stuff using the START command
         //       if so, just change this to START and add a case to the very next switch statement
+        
         curr_command = NOP;
+        #ifdef DEBUG_RF
+          Serial.println("RF: START ISSUED");
+        #endif
         break;
       case STOP  : // To be sent when the game is over
         if (game.override_dir & PAC_DEATH == PAC_DEATH) {
-            // Call pacman death sequence
+          #ifdef DEBUG_RF
+            Serial.println("RF: PACMAN DIED");
+          #endif  
+          // Call pacman death sequence
         }
         // Turn off all robots
         // Remain stopped
+        #ifdef DEBUG_RF
+          Serial.println("RF: STOP ISSUED");
+        #endif
         curr_command = STOP;
         break; 
       case PAUSE : // Pause the game temporarily
         // Prevents sneaky resume of gameplay (STOP -> PAUSE -> RESUME, would be valid otherwise)
-        if (curr_command == STOP)
+        if (curr_command == STOP) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: PAUSE UNAVAILABLE");
+          #endif
           break;
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: PAUSE ISSUED");
+        #endif
         // Turn off all robot's motors, probably not the lights
         // Remain paused until resume issued
         curr_command = PAUSE;
@@ -407,26 +446,47 @@ void loop() {
       case RESUME:  // Resume from a pause
         // Turn on all robot's motors
         // CANNOT resume from a stop
-        if (curr_command == STOP)
+        if (curr_command == STOP) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: RESUME UNAVAILABLE");
+          #endif
           break;
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: RESUME ISSUED");
+        #endif
         // Return to normal play
         curr_command = NOP;
         break;
       case MANUAL_OVERRIDE  :
         // Can't control while paused or stopped.
-        if (curr_command == STOP || curr_command == PAUSE)
+        if (curr_command == STOP || curr_command == PAUSE) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: MANUAL_OVERRIDE UNAVAILABLE");
+          #endif
           break;
+        }
         // Can't manually control ghosts
         if (playerSelect != PACMAN)
           break;
+        #ifdef DEBUG_RF
+          Serial.println("RF: MANUAL_OVERRIDE ISSUED");
+        #endif
         curr_command = MANUAL_OVERRIDE;
         
-      default    : break; //Do nothing 
+      default    : 
+        #ifdef DEBUG_RF
+          Serial.println("RF: INVALID COMMAND");
+        #endif
+        break; //Do nothing 
     }
+  } else {
+    #ifdef DEBUG_RF
+      Serial.println("RF: INVALID CHECKSUM");
+    #endif
   } 
-  
-  // The meat of controlling the motors + line_sensing will be done here
-  
+ 
+  // The meat of controlling the motors + line sensing will be done here
   switch(curr_command) {
     case NOP             : /*Execute normal AI control functions*/ break;
     case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
@@ -435,7 +495,7 @@ void loop() {
     default              : /*PAUSE, STOP, START*/ break;
   }
   
-  
+  // Old code just in case you want a reminder.
   //map_expand();
   //collision_detect();
   if(Serial.available()){
