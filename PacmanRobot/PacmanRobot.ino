@@ -3,6 +3,16 @@
 //#define DEBUG_MOT  // Debug messages related to motor control
 //#define DEBUG_AI   // Debug messages related to AI decisions
 //#define DEBUG_MAN  // Debug messages related to manual control decisions
+
+uint8_t red = 0;
+uint8_t blue = 0;
+uint8_t green = 0;
+
+void debug_colour();
+
+
+
+#define USE_RADIO
   
 #include <stdint.h>
 #include <stdbool.h>
@@ -173,7 +183,7 @@ void LineSensor::calibrate(){
  * Hardware definitions
  */
  
- // Which pin on the Arduino is connected to the NeoPixels?
+// Which pin on the Arduino is connected to the NeoPixels?
 // On a Trinket or Gemma we suggest changing this to 1
 #define LED_STRIP_PIN            43
 // eyes connected to pins 42,44,46,48
@@ -202,7 +212,7 @@ LineSensor lineLeft(8,9,10,11);
 
 RF24 radio(49,53);
 
-// to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
+// to be inserted: button(s) (x1 or x2) for mode select
 
 /*
  * Local definitions
@@ -218,7 +228,7 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define M_FAST  250
 #define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
-
+#define MAX_ALIGN_TIME 2000
 
 /*
  * Global Variables
@@ -323,6 +333,14 @@ void init_LEDs(){
   int i;
   for(i=0;i<NUMPIXELS;i++){
      pixels.setPixelColor(i, pixels.Color(0,0,0));
+  }
+  pixels.show();
+}
+
+void debug_colour() {
+  int i;
+  for(i=0;i<NUMPIXELS;i++) {
+    pixels.setPixelColor(i, pixels.Color(red,green,blue));
   }
   pixels.show();
 }
@@ -442,8 +460,10 @@ void setup() {
   init_LEDs();
   while(!Serial.available()){}
   init_motors();
-  //init_radio();
   randomSeed(micros());
+  #ifdef USE_RADIO
+    init_radio();
+  #endif
   //Serial.println(GAME_SIZE);
   //init_game();
   
@@ -459,131 +479,138 @@ int manual_override_counter = 0;
 //       game is still updated normally, including if the person changes their input
 #define MANUAL_OVERRIDE_THRESHOLD 1000
 void loop() {
-  /*update_game();
-  // Whilst the last manual_override is in effect, don't update the current command
-  if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
-    // Once threshold reached, return to standard play (w/ AI)
-    manual_override_counter = 0;
-    curr_command = NOP;
-    #ifdef DEBUG_RF
-      Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
-    #endif
-  }
-  // Make sure the game header is consistent with the checksum 
-  if (game.header == checksum()) {
-    // This section updates all relevant variables from the received RF packet
-    switch(game.command) {
-      case NOP   : // No special operation, run game as normal
-        // Do not permit normal operations if manual override, pause or stop are in effect
-        if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) { 
-          #ifdef DEBUG_RF
-            Serial.println("RF: NOP UNAVAILABLE");
-          #endif
-          break;
-        }
-        #ifdef DEBUG_RF
-          Serial.println("RF: NOP ISSUED");
-        #endif
-        curr_command = NOP;
-        break;
-      case START : // Begin the game from the initial position after the end of a game
-        // Cannot start game unless robots are in the STOP state. (STOP can be issued at any time)
-        if (curr_command != STOP) {
-           #ifdef DEBUG_RF
-             Serial.println("RF: START UNAVAILABLE");
-           #endif
-           break; 
-        }
-        // Turn on all robots, ghosts must cascade out of middle section
-        // Return to normal play
-        // NOTE: Not sure if you want to do special motor control stuff using the START command
-        //       if so, just change this to START and add a case to the very next switch statement
-        
-        curr_command = START;
-        #ifdef DEBUG_RF
-          Serial.println("RF: START ISSUED");
-        #endif
-        break;
-      case STOP  : // To be sent when the game is over
-        if (game.override_dir & PAC_DEATH == PAC_DEATH) {
-          #ifdef DEBUG_RF
-            Serial.println("RF: PACMAN DIED");
-          #endif  
-          // Call pacman death sequence
-        }
-        // Turn off all robots
-        // Remain stopped
-        #ifdef DEBUG_RF
-          Serial.println("RF: STOP ISSUED");
-        #endif
-        curr_command = STOP;
-        break; 
-      case PAUSE : // Pause the game temporarily
-        // Prevents sneaky resume of gameplay (STOP -> PAUSE -> RESUME, would be valid otherwise)
-        if (curr_command == STOP) {
-          #ifdef DEBUG_RF
-            Serial.println("RF: PAUSE UNAVAILABLE");
-          #endif
-          break;
-        }
-        #ifdef DEBUG_RF
-          Serial.println("RF: PAUSE ISSUED");
-        #endif
-        // Turn off all robot's motors, probably not the lights
-        // Remain paused until resume issued
-        curr_command = PAUSE;
-        break;
-      case RESUME:  // Resume from a pause
-        // Turn on all robot's motors
-        // CANNOT resume from a stop
-        if (curr_command == STOP) {
-          #ifdef DEBUG_RF
-            Serial.println("RF: RESUME UNAVAILABLE");
-          #endif
-          break;
-        }
-        #ifdef DEBUG_RF
-          Serial.println("RF: RESUME ISSUED");
-        #endif
-        // Return to normal play
-        curr_command = NOP;
-        break;
-      case MANUAL_OVERRIDE  :
-        // Can't control while paused or stopped.
-        if (curr_command == STOP || curr_command == PAUSE) {
-          #ifdef DEBUG_RF
-            Serial.println("RF: MANUAL_OVERRIDE UNAVAILABLE");
-          #endif
-          break;
-        }
-        // Can't manually control ghosts
-        if (playerSelect != PACMAN)
-          break;
-        #ifdef DEBUG_RF
-          Serial.println("RF: MANUAL_OVERRIDE ISSUED");
-        #endif
-        curr_command = MANUAL_OVERRIDE;
-        
-      default    : 
-        #ifdef DEBUG_RF
-          Serial.println("RF: INVALID COMMAND");
-        #endif
-        break; //Do nothing 
+  #ifdef USE_RADIO
+    update_game();
+    // Whilst the last manual_override is in effect, don't update the current command
+    if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
+      // Once threshold reached, return to standard play (w/ AI)
+      manual_override_counter = 0;
+      curr_command = NOP;
+      #ifdef DEBUG_RF
+        Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
+      #endif
     }
-  } else {
-    #ifdef DEBUG_RF
-      Serial.println("RF: INVALID CHECKSUM");
-    #endif
-  } 
-   */
-  // The meat of controlling the motors + line sensing will be done here
-  //switch(curr_command) {
-    //case NOP             : /*Execute normal AI control functions*/ break;
-    //case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
-    //case PAUSE           : /*Continue to the next case...*/
-    //case STOP            : /*If button pressed, change player*/ break;
-    //default              : /*PAUSE, STOP, START*/ break;
-  //}
+    // Make sure the game header is consistent with the checksum 
+    if (game.header == checksum()) {
+      // This section updates all relevant variables from the received RF packet
+      switch(game.command) {
+        case NOP   : // No special operation, run game as normal
+          // Do not permit normal operations if manual override, pause or stop are in effect
+          if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) { 
+            #ifdef DEBUG_RF
+              Serial.println("RF: NOP UNAVAILABLE");
+            #endif
+            break;
+          }
+          #ifdef DEBUG_RF
+            Serial.println("RF: NOP ISSUED");
+          #endif
+          curr_command = NOP;
+          break;
+        case START : // Begin the game from the initial position after the end of a game
+          // Cannot start game unless robots are in the STOP state. (STOP can be issued at any time)
+          if (curr_command != STOP) {
+             #ifdef DEBUG_RF
+               Serial.println("RF: START UNAVAILABLE");
+             #endif
+             break; 
+          }
+          // Turn on all robots, ghosts must cascade out of middle section
+          // Return to normal play
+          // NOTE: Not sure if you want to do special motor control stuff using the START command
+          //       if so, just change this to START and add a case to the very next switch statement
+          
+          curr_command = START;
+          #ifdef DEBUG_RF
+            Serial.println("RF: START ISSUED");
+          #endif
+          break;
+        case STOP  : // To be sent when the game is over
+          if (game.override_dir & PAC_DEATH == PAC_DEATH) {
+            #ifdef DEBUG_RF
+              Serial.println("RF: PACMAN DIED");
+            #endif  
+            // Call pacman death sequence
+          }
+          // Turn off all robots
+          // Remain stopped
+          #ifdef DEBUG_RF
+            Serial.println("RF: STOP ISSUED");
+          #endif
+          curr_command = STOP;
+          break; 
+        case PAUSE : // Pause the game temporarily
+          // Prevents sneaky resume of gameplay (STOP -> PAUSE -> RESUME, would be valid otherwise)
+          if (curr_command == STOP) {
+            #ifdef DEBUG_RF
+              Serial.println("RF: PAUSE UNAVAILABLE");
+            #endif
+            break;
+          }
+          #ifdef DEBUG_RF
+            Serial.println("RF: PAUSE ISSUED");
+          #endif
+          // Turn off all robot's motors, probably not the lights
+          // Remain paused until resume issued
+          curr_command = PAUSE;
+          break;
+        case RESUME:  // Resume from a pause
+          // Turn on all robot's motors
+          // CANNOT resume from a stop
+          if (curr_command == STOP) {
+            #ifdef DEBUG_RF
+              Serial.println("RF: RESUME UNAVAILABLE");
+            #endif
+            break;
+          }
+          #ifdef DEBUG_RF
+            Serial.println("RF: RESUME ISSUED");
+          #endif
+          // Return to normal play
+          curr_command = NOP;
+          break;
+        case MANUAL_OVERRIDE  :
+          // Can't control while paused or stopped.
+          if (curr_command == STOP || curr_command == PAUSE) {
+            #ifdef DEBUG_RF
+              Serial.println("RF: MANUAL_OVERRIDE UNAVAILABLE");
+            #endif
+            break;
+          }
+          // Can't manually control ghosts
+          if (playerSelect != PACMAN)
+            break;
+          #ifdef DEBUG_RF
+            Serial.println("RF: MANUAL_OVERRIDE ISSUED");
+          #endif
+          curr_command = MANUAL_OVERRIDE;
+          
+        default    : 
+          #ifdef DEBUG_RF
+            Serial.println("RF: INVALID COMMAND");
+          #endif
+          break; //Do nothing 
+      }
+    } else {
+      #ifdef DEBUG_RF
+        Serial.println("RF: INVALID CHECKSUM");
+      #endif
+    } 
+    
+    // The meat of controlling the motors + line sensing will be done here
+    switch(curr_command) {
+      case NOP             : /*Execute normal AI control functions*/ break;
+      case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
+      case PAUSE           : /*Continue to the next case...*/
+      case STOP            : /*If button pressed, change player*/ break;
+      default              : /*PAUSE, STOP, START*/ break;
+    }
+  #else  
+    // Non-map based motor control goes here
+    decide_direction(detect_intersection());
+    move_robot();
+  #endif
+  
   
   // Old code just in case you want a reminder.
   //map_expand();
@@ -672,13 +699,17 @@ uint8_t detect_intersection() {
   if (trip<2) {
     return 0;
   } else if(trip>2) {
-    while(!align2intersection()){}
+    red = 255; green = 0; blue = 0;
+    debug_colour();
+    unsigned long time = millis();
+    while(!align2intersection() && millis() - time < MAX_ALIGN_TIME){}
   } else if(readTop!=NONE&&readBottom!=NONE){
     return 0;
   } else if(readLeft!=NONE&&readRight!=NONE){
     return 0;
   } else {
-    while(!align2intersection()){}
+    unsigned long time = millis();
+    while(!align2intersection() && millis() - time < MAX_ALIGN_TIME){}
   }  
   uint8_t options = 0;
   readTop = lineTop.get_line();
@@ -781,6 +812,8 @@ bool align2intersection() {
   
 
 void line_follow(){
+  red = 50; green = 50; blue = 50;
+  debug_colour();
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -902,7 +935,6 @@ void move_flag(){
 }
 
 void move_robot() {
-  line_follow();
   if(currentHeading!=globalHeading){
     if(currentHeading=='0'){
       m_topLeft.enableOutputs();
@@ -921,6 +953,7 @@ void move_robot() {
     }
     currentHeading=globalHeading;
   }
+  line_follow();
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
@@ -932,6 +965,79 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
   if(speedVal!=newSpeed){
     thisMotor->setSpeed(newSpeed);
   }
+}
+
+void decide_direction(uint8_t options){
+  //heading_t newHeading;
+  heading_t directionList[4];
+  uint8_t directionInts[4];
+  float angle;
+  // Make doubling back impossible. (maybe enable for pacman later)
+  options &= ~heading2binary(globalHeading);
+  
+  if(goal.x==0&&goal.y==0){ //random movement mode
+    char dirList[4] = {'u', 'd', 'l', 'r'};
+    globalHeading = dirList[random(0,4)];
+    return;
+  }
+  if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
+    switch(thisRobot->h){
+      case 'u':
+        angle = 90;
+        break;
+      case 'r':
+        angle = 0;
+        break;
+      case 'd':
+        angle = -90;
+        break;
+      case 'l':
+        angle = 180;
+        break;
+      default :
+        angle = 90;
+        break;
+    }
+  } else {
+    angle = atan2(thisRobot->p.y-goal.y,goal.x-thisRobot->p.x);
+  } 
+  if (angle>=135) {
+    strncpy(directionList,"ludr",4);
+  } else if(angle>=90){
+    strncpy(directionList,"ulrd",4);
+  } else if(angle>=45){
+    strncpy(directionList,"urld",4);
+  } else if(angle>=0){
+    strncpy(directionList,"rudl",4);
+  } else if(angle>=-45){
+    strncpy(directionList,"rdul",4);
+  } else if(angle>=-90){
+    strncpy(directionList,"drlu",4);
+  } else if(angle>=-135){
+    strncpy(directionList,"dlru",4);
+  } else if(angle>=-180){
+    strncpy(directionList,"ldur",4);;
+  } else { // default probably not needed
+    strncpy(directionList,"urdl",4);
+  }
+  int i;
+  for(i=0;i<4;i++){
+    directionInts[i] = heading2binary(directionList[i]);
+  }
+  i=0;
+  while(i<4){
+    if((options&directionInts[i])>0){
+      break;
+    }
+    i++;
+  }
+  if(i==4){
+    //newHeading = '0';
+    globalHeading = '0';
+  } else {
+    //newHeading = directionList[i];
+    globalHeading = directionList[i];
+  }  
 }
 
 /**    MAP NAVIGATION FUNCTIONS    **/
@@ -1082,73 +1188,6 @@ bool collision_detect(heading_t h){
   }
   return collision;
 }
-
-void decide_direction(uint8_t options){
-  //heading_t newHeading;
-  heading_t directionList[4];
-  uint8_t directionInts[4];
-  float angle;
-  if(goal.x==0&&goal.y==0){ //random movement mode
-  }
-  if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
-    switch(thisRobot->h){
-      case 'u':
-        angle = 90;
-        break;
-      case 'r':
-        angle = 0;
-        break;
-      case 'd':
-        angle = -90;
-        break;
-      case 'l':
-        angle = 180;
-        break;
-      default :
-        angle = 90;
-        break;
-    }
-  } else {
-    angle = atan2(thisRobot->p.y-goal.y,goal.x-thisRobot->p.x);
-  } 
-  if (angle>=135){
-    strncpy(directionList,"ludr",4);
-  } else if(angle>=90){
-    strncpy(directionList,"ulrd",4);
-  } else if(angle>=45){
-    strncpy(directionList,"urld",4);
-  } else if(angle>=0){
-    strncpy(directionList,"rudl",4);
-  } else if(angle>=-45){
-    strncpy(directionList,"rdul",4);
-  } else if(angle>=-90){
-    strncpy(directionList,"drlu",4);
-  } else if(angle>=-135){
-    strncpy(directionList,"dlru",4);
-  } else if(angle>=-180){
-    strncpy(directionList,"ldur",4);;
-  } else { // default probably not needed
-    strncpy(directionList,"urdl",4);
-  }
-  int i;
-  for(i=0;i<4;i++){
-    directionInts[i] = heading2binary(directionList[i]);
-  }
-  i=0;
-  while(i<4){
-    if((options&directionInts[i])>0){
-      break;
-    }
-    i++;
-  }
-  if(i==4){
-    //newHeading = '0';
-    globalHeading = '0';
-  } else {
-    //newHeading = directionList[i];
-    globalHeading = directionList[i];
-  }  
-}
   
 void map_expand(){
   int x = thisRobot->p.x;
@@ -1158,7 +1197,7 @@ void map_expand(){
   uint8_t options = 0b0000;
   int tempX, tempY;
   // expands along 
-  if(is_open(x,y,'u')&&h!='d'){
+  if(is_open(x,y,'u')){
     tempX = x; tempY = y-1;
     r = expand(&tempX,&tempY,'u');
     if(r==NULL) {
@@ -1168,7 +1207,7 @@ void map_expand(){
       }
     }
   }
-  if(is_open(x,y,'r')&&h!='l'){
+  if(is_open(x,y,'r')){
     tempX = x+1; tempY = y;
     r = expand(&tempX,&tempY,'r');
     if(r==NULL) {
@@ -1178,7 +1217,7 @@ void map_expand(){
       }
     }
   }
-  if(is_open(x,y,'d')&&h!='u'){
+  if(is_open(x,y,'d')){
     tempX = x; tempY = y+1;
     r = expand(&tempX,&tempY,'d');
     if(r==NULL) {
@@ -1188,7 +1227,7 @@ void map_expand(){
       }
     }
   }
-  if(is_open(x,y,'l')&&h!='r'){
+  if(is_open(x,y,'l')){
     tempX = x-1; tempY = y;
     r = expand(&tempX,&tempY,'l');
     if(r==NULL) {
