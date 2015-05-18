@@ -177,13 +177,12 @@ void LineSensor::calibrate(){
 // On a Trinket or Gemma we suggest changing this to 1
 #define LED_STRIP_PIN            43
 // eyes connected to pins 42,44,46,48
-#define EYE_LL  42
-#define EYE_LR  44
-#define EYE_RL  46
-#define EYE_RR  48
+#define EYE_LL  44
+#define EYE_LR  42
+#define EYE_RL  48
+#define EYE_RR  46
 
 uint8_t rgb[3];
-
 const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7,17,18,19}};
 // top, right, bottom, left region
 
@@ -200,7 +199,8 @@ LineSensor lineTop(15,14,13,12);
 LineSensor lineRight(0,1,2,3);
 LineSensor lineBottom(7,6,5,4);
 LineSensor lineLeft(8,9,10,11);
-RF24 radio(9,10);
+
+RF24 radio(49,53);
 
 // to be inserted: LED strip (one pin), LCD (i2c bus), button(s) (x1 or x2) for mode select
 
@@ -210,8 +210,8 @@ RF24 radio(9,10);
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER PACMAN
-#define PLAYER_STRING "PACMAN"
+#define PLAYER GHOST1
+#define PLAYER_STRING "GHOST1"
 // will make this selectable via user interface on robot
 
 #define M_SPEED 300
@@ -252,10 +252,16 @@ void init_radio(void);
 void init_motors(void);
 void init_light_sensors(void);
 void init_LEDs(void);
+
+void ghost_animation(void);
+void pac_animation(void);
+
 void init_game(void);
 void update_game(void);
 void init_game_map(void);
 void print_game(void);
+void set_checksum(void);
+uint8_t checksum(void);
 
 
 void move_robot(void);
@@ -265,9 +271,6 @@ void get_motor_alignment(AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_b
 void get_line_alignment(LineSensor *l_F,LineSensor *l_B);
 void line_follow(void);
 bool align2intersection(void);
-
-void ghost_animation(void);
-void pac_animation(void);
 
 void set_goal(void);
 void map_expand(void);
@@ -436,12 +439,14 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
   Serial.println("Starting run...");
+  init_LEDs();
+  while(!Serial.available()){}
   init_motors();
   //init_radio();
   randomSeed(micros());
   //Serial.println(GAME_SIZE);
   //init_game();
-  init_LEDs();
+  
   player_LEDs(); 
   
 }
@@ -454,7 +459,7 @@ int manual_override_counter = 0;
 //       game is still updated normally, including if the person changes their input
 #define MANUAL_OVERRIDE_THRESHOLD 1000
 void loop() {
-  update_game();
+  /*update_game();
   // Whilst the last manual_override is in effect, don't update the current command
   if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
     // Once threshold reached, return to standard play (w/ AI)
@@ -570,15 +575,15 @@ void loop() {
       Serial.println("RF: INVALID CHECKSUM");
     #endif
   } 
- 
+   */
   // The meat of controlling the motors + line sensing will be done here
-  switch(curr_command) {
-    case NOP             : /*Execute normal AI control functions*/ break;
-    case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
-    case PAUSE           : /*Continue to the next case...*/
-    case STOP            : /*If button pressed, change player*/ break;
-    default              : /*PAUSE, STOP, START*/ break;
-  }
+  //switch(curr_command) {
+    //case NOP             : /*Execute normal AI control functions*/ break;
+    //case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
+    //case PAUSE           : /*Continue to the next case...*/
+    //case STOP            : /*If button pressed, change player*/ break;
+    //default              : /*PAUSE, STOP, START*/ break;
+  //}
   
   // Old code just in case you want a reminder.
   //map_expand();
@@ -591,7 +596,7 @@ void loop() {
     move_robot();
   }
   if(millis()-loopTime>500){
-    pac_animation();
+    ghost_animation();
     loopTime = millis();
   }
 }
@@ -612,8 +617,19 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    radio.read((char *)&game,GAME_SIZE);
-    delay(1);
+    game_state_t game_buf;
+    radio.read((char *)&game_buf,GAME_SIZE);
+    if (game_buf.header == checksum() & game.command == MANUAL_OVERRIDE) {
+       game.command = MANUAL_OVERRIDE;
+       game.override_dir = game_buf.override_dir;
+       // Do NOT overwrite current pac and ghost locations and headings
+       // A REALLY dodgy way to keep the game consistent, because the controller
+       // doesn't have robot information
+       set_checksum();
+    } else if (game_buf.header == checksum()) {
+      // For normal game update, 
+      game = game_buf;
+    }
   } else {
     // Not achievable with checksum()
     game.header = -1;
@@ -628,6 +644,16 @@ uint8_t checksum() {
      }
   }
   return sum;
+}
+
+void set_checksum() {
+  uint8_t i, j, sum = 0;
+  for (i = 1; i < GAME_SIZE; i++) {
+     for (j = 0; j < 8; j++) {
+        sum += (((char *)&game)[i] & (1 << j)) >> j;
+     }
+  }
+  game.header = sum;
 }
 
 /**    MOVEMENT FUNCTIONS    **/
@@ -876,6 +902,7 @@ void move_flag(){
 }
 
 void move_robot() {
+  line_follow();
   if(currentHeading!=globalHeading){
     if(currentHeading=='0'){
       m_topLeft.enableOutputs();
