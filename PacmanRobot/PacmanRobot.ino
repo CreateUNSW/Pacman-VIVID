@@ -10,9 +10,7 @@ uint8_t green = 0;
 
 void debug_colour();
 
-
-
-#define USE_RADIO
+//#define USE_RADIO
   
 #include <stdint.h>
 #include <stdbool.h>
@@ -200,10 +198,10 @@ const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7
 #define NUMPIXELS      20// (max for Pacman?)
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
-AccelStepper m_topLeft(AccelStepper::HALF4WIRE,24,22,28,26,false);
-AccelStepper m_topRight(AccelStepper::HALF4WIRE,25,23,29,27,false);
-AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,34,32,38,36,false);
-AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,35,33,39,37,false);
+AccelStepper m_topLeft(AccelStepper::HALF4WIRE,26,28,22,24,false);
+AccelStepper m_topRight(AccelStepper::HALF4WIRE,27,29,23,25,false);
+AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,36,38,32,34,false);
+AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,37,39,33,35,false);
 
 LineSensor lineTop(15,14,13,12);
 LineSensor lineRight(0,1,2,3);
@@ -225,8 +223,8 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 // will make this selectable via user interface on robot
 
 #define M_SPEED 300
-#define M_FAST  250
-#define M_SLOW  150
+#define M_FAST  500
+#define M_SLOW  100
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
 
@@ -239,7 +237,7 @@ playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 //uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
-heading_t globalHeading = '0';
+heading_t globalHeading = 'u';
 heading_t currentHeading = '0';
 unsigned long aiTime = 0;
 unsigned long loopTime = 0;
@@ -277,8 +275,8 @@ uint8_t checksum(void);
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
-void get_motor_alignment(AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
-void get_line_alignment(LineSensor *l_F,LineSensor *l_B);
+void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **m_bL,AccelStepper **m_bR);
+void get_line_alignment(LineSensor **l_F,LineSensor **l_B);
 void line_follow(void);
 bool align2intersection(void);
 
@@ -313,6 +311,10 @@ void init_motors() {
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_topLeft.disableOutputs();
+  m_topRight.disableOutputs();
+  m_bottomLeft.disableOutputs();
+  m_bottomRight.disableOutputs();
   Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
   Timer1.attachInterrupt( move_flag );  // interrupt sets motion flag
 }
@@ -456,14 +458,37 @@ void init_game() {
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
-  Serial.println("Starting run...");
+//  Serial.println("Starting run...");
+  globalHeading = 'u';
   init_LEDs();
-  while(!Serial.available()){}
+  //while(!Serial.available()){}
   init_motors();
   randomSeed(micros());
   #ifdef USE_RADIO
     init_radio();
   #endif
+  // purple
+  red = 50; green = 0; blue = 50;
+  debug_colour();
+  pinMode(47, OUTPUT);
+  digitalWrite(47,LOW);
+  pinMode(45,INPUT_PULLUP);
+  // Wait for first button press
+  while (digitalRead(45));
+  delay(50);
+  while (!digitalRead(45));
+  // software debounce with this delay
+  // blue
+  red = 0; green = 0; blue = 50;
+  debug_colour();
+  delay(50);
+  // Wait for second button press and continually calibrate
+  while (digitalRead(45)) {
+    init_light_sensors();
+  }
+  delay(50);
+  while (!digitalRead(45));
+  
   //Serial.println(GAME_SIZE);
   //init_game();
   
@@ -479,6 +504,12 @@ int manual_override_counter = 0;
 //       game is still updated normally, including if the person changes their input
 #define MANUAL_OVERRIDE_THRESHOLD 1000
 void loop() {
+  if (!digitalRead(45)) {
+    delay(50);
+    while (!digitalRead(45));
+    delay(50);
+    setup();
+  }
   #ifdef USE_RADIO
     update_game();
     // Whilst the last manual_override is in effect, don't update the current command
@@ -607,25 +638,35 @@ void loop() {
     }
   #else  
     // Non-map based motor control goes here
-    decide_direction(detect_intersection());
-    move_robot();
+    red = 0; green = 0; blue = 0;
+    debug_colour();
+   // decide_direction(detect_intersection());
+    uint8_t options;
+    if (options = detect_intersection() > 0) {
+      decide_direction(options);
+    }
+    
+    if(moveFlag){
+      moveFlag = 0;
+      move_robot();
+    }
   #endif
   
   
   // Old code just in case you want a reminder.
   //map_expand();
   //collision_detect();
-  if(Serial.available()){
-    globalHeading=Serial.read();
-  }
-  if(moveFlag){
-    moveFlag = 0;
-    move_robot();
-  }
-  if(millis()-loopTime>500){
-    ghost_animation();
-    loopTime = millis();
-  }
+//  if(Serial.available()){
+//    globalHeading=Serial.read();
+//  }
+//  if(moveFlag){
+//    moveFlag = 0;
+//    move_robot();
+//  }
+//  if(millis()-loopTime>500){
+//    ghost_animation();
+//    loopTime = millis();
+//  }
 }
 
 void print_game() {
@@ -699,17 +740,18 @@ uint8_t detect_intersection() {
   if (trip<2) {
     return 0;
   } else if(trip>2) {
-    red = 255; green = 0; blue = 0;
+    // red
+    red = 50; green = 0; blue = 0;
     debug_colour();
     unsigned long time = millis();
-    while(!align2intersection() && millis() - time < MAX_ALIGN_TIME){}
+    while(!align2intersection() && (millis() - time < MAX_ALIGN_TIME)){}
   } else if(readTop!=NONE&&readBottom!=NONE){
     return 0;
   } else if(readLeft!=NONE&&readRight!=NONE){
     return 0;
   } else {
     unsigned long time = millis();
-    while(!align2intersection() && millis() - time < MAX_ALIGN_TIME){}
+    while(!align2intersection() && (millis() - time < MAX_ALIGN_TIME)){}
   }  
   uint8_t options = 0;
   readTop = lineTop.get_line();
@@ -812,8 +854,9 @@ bool align2intersection() {
   
 
 void line_follow(){
-  red = 50; green = 50; blue = 50;
-  debug_colour();
+  // white
+  //red = 50; green = 50; blue = 50;
+  //debug_colour();
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -821,8 +864,8 @@ void line_follow(){
   AccelStepper *m_backRight;
   LineSensor *lineFront;
   LineSensor *lineBack;
-  get_motor_alignment(m_frontLeft,m_frontRight,m_backLeft,m_backRight);
-  get_line_alignment(lineFront,lineBack);
+  get_motor_alignment(&m_frontLeft,&m_frontRight,&m_backLeft,&m_backRight);
+  get_line_alignment(&lineFront,&lineBack);
   line_pos_t readFront = lineFront->get_line();
   line_pos_t readBack = lineBack->get_line();
   if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
@@ -869,63 +912,63 @@ void line_follow(){
   }
 }
 
-void get_line_alignment(LineSensor *l_F,LineSensor *l_B){
+void get_line_alignment(LineSensor **l_F,LineSensor **l_B){
     switch(globalHeading){
     case 'u' :
-      l_F = &lineTop;
-      l_B = &lineBottom;
+      *l_F = &lineTop;
+      *l_B = &lineBottom;
       break;
     case 'r' :
-      l_F = &lineRight;
-      l_B = &lineLeft;
+      *l_F = &lineRight;
+      *l_B = &lineLeft;
       break;
     case 'd' :
-      l_F = &lineBottom;
-      l_B = &lineTop;
+      *l_F = &lineBottom;
+      *l_B = &lineTop;
       break;
     case 'l' :
-      l_F = &lineLeft;
-      l_B = &lineRight;
+      *l_F = &lineLeft;
+      *l_B = &lineRight;
       break;
     default : 
-      l_F = &lineTop;
-      l_B = &lineBottom;
+      *l_F = &lineTop;
+      *l_B = &lineBottom;
       break;
   }
 }
 
-void get_motor_alignment(AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR){
+void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **m_bL,AccelStepper **m_bR){
   // global heading must have motor direction first
   switch(globalHeading){
     case 'u' :
-      m_fL = &m_topLeft;
-      m_fR = &m_topRight;
-      m_bL = &m_bottomLeft;
-      m_bR = &m_bottomRight;
+      *m_fL = &m_topLeft;
+      *m_fR = &m_topRight;
+      *m_bL = &m_bottomLeft;
+      *m_bR = &m_bottomRight;
       break;
     case 'r' :
-      m_fL = &m_topRight;
-      m_fR = &m_bottomRight;
-      m_bL = &m_topLeft;
-      m_bR = &m_bottomLeft;
+      *m_fL = &m_topRight;
+      *m_fR = &m_bottomRight;
+      *m_bL = &m_topLeft;
+      *m_bR = &m_bottomLeft;
       break;
     case 'd' :
-      m_fL = &m_bottomRight;
-      m_fR = &m_bottomLeft;
-      m_bL = &m_topRight;
-      m_bR = &m_topLeft;
+      *m_fL = &m_bottomRight;
+      *m_fR = &m_bottomLeft;
+      *m_bL = &m_topRight;
+      *m_bR = &m_topLeft;
       break;
     case 'l' :
-      m_fL = &m_bottomLeft;
-      m_fR = &m_topLeft;
-      m_bL = &m_bottomRight;
-      m_bR = &m_topRight;
+      *m_fL = &m_bottomLeft;
+      *m_fR = &m_topLeft;
+      *m_bL = &m_bottomRight;
+      *m_bR = &m_topRight;
       break;
     default : 
-      m_fL = &m_topLeft;
-      m_fR = &m_topRight;
-      m_bL = &m_bottomLeft;
-      m_bR = &m_bottomRight;
+      *m_fL = &m_topLeft;
+      *m_fR = &m_topRight;
+      *m_bL = &m_bottomLeft;
+      *m_bR = &m_bottomRight;
       break;
   }
 }
@@ -954,6 +997,10 @@ void move_robot() {
     currentHeading=globalHeading;
   }
   line_follow();
+//  updateSpeed(&m_topLeft,50);
+//      updateSpeed(&m_topRight,50);
+//      updateSpeed(&m_bottomLeft,50);
+//      updateSpeed(&m_bottomRight,50);
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
@@ -968,16 +1015,26 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
 }
 
 void decide_direction(uint8_t options){
-  //heading_t newHeading;
+  heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
   float angle;
   // Make doubling back impossible. (maybe enable for pacman later)
   options &= ~heading2binary(globalHeading);
   
+  goal.x = 0;
+  goal.y = 0;
   if(goal.x==0&&goal.y==0){ //random movement mode
     char dirList[4] = {'u', 'd', 'l', 'r'};
-    globalHeading = dirList[random(0,4)];
+    newHeading = 0;
+    do {
+      // heading is going to be a single bit set
+      uint8_t heading = options & (1 << random(0,4));
+      if (heading != 0) {
+        newHeading = binary2heading(heading);
+      }
+    } while (newHeading == 0);
+    globalHeading = newHeading;
     return;
   }
   if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
@@ -1316,6 +1373,18 @@ void calc_new_square(int *x,int*y,heading_t h,int d){
   *y = *y + ((yy&dir&addDir)>0)*d - ((yy&dir&subDir)>0)*d;
 }
   
+char binary2heading(uint8_t h) {
+  char ret;
+  switch(h){
+    case 0b0001 : ret = 'u'; break;
+    case 0b0010 : ret = 'r'; break;
+    case 0b0100 : ret = 'd'; break;
+    case 0b1000 : ret = 'l'; break;
+    default  : ret = 0b0000; break;
+  }
+  return(ret);
+  
+}
 
 uint8_t heading2binary(heading_t h){
   uint8_t ret;
