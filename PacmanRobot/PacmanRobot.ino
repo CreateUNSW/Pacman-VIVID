@@ -1,3 +1,9 @@
+//#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+//#define DEBUG_LIN  // Debug messages related to line following and sensors
+//#define DEBUG_MOT  // Debug messages related to motor control
+//#define DEBUG_AI   // Debug messages related to AI decisions
+//#define DEBUG_MAN  // Debug messages related to manual control decisions
+  
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -38,6 +44,8 @@
 
 #define GAME_SIZE sizeof(game_state_t)
 
+// Pacman death sequence code, must NOT conflict with music mask of broadcaster
+#define PAC_DEATH 0b10000000
 /*
  * Map definitions
  */
@@ -224,13 +232,16 @@ position_t goal;
 heading_t globalHeading = '0';
 heading_t currentHeading = '0';
 unsigned long aiTime = 0;
+unsigned long loopTime = 0;
+unsigned long lastIntersection = 0;
 bool animationToggle = 0;
 
 game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
 uint8_t __space[21];
-// Pointer to be used when updating game from radio
-game_state_t *g = &game;
+
+// Initialise the robots as stopped
+int curr_command = STOP;
 
 
 /*
@@ -250,8 +261,10 @@ void print_game(void);
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
-void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
+void get_motor_alignment(AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR);
+void get_line_alignment(LineSensor *l_F,LineSensor *l_B);
 void line_follow(void);
+bool align2intersection(void);
 
 void ghost_animation(void);
 void pac_animation(void);
@@ -314,8 +327,8 @@ void init_LEDs(){
 void player_LEDs(){
   switch(playerSelect){
     case PACMAN :
-      rgb[0] = 250;
-      rgb[1] = 250;
+      rgb[0] = 220;
+      rgb[1] = 220;
       rgb[2] = 0;
       break;
     case GHOST1 :
@@ -417,18 +430,6 @@ void init_game() {
     case PACMAN : thisRobot = &game.pac; break;    
     default  : thisRobot = &game.g[playerSelect-1]; break;
   }
-  while (game.command != START) {
-    //Serial.println(game.command);
-    update_game();
-    // Don't trust start command with faulty checksum
-    if (game.header != checksum()) {
-       game.command == STOP; 
-    }
-    print_game();
-    //Serial.println("Will the game ever start?");
-    //delay(300);
-  }
-  Serial.println("The game has begun!");
 }
 
 void setup() {
@@ -436,7 +437,6 @@ void setup() {
   Serial.begin(57600);
   Serial.println("Starting run...");
   init_motors();
-  //pinMode(4,OUTPUT);
   //init_radio();
   randomSeed(micros());
   //Serial.println(GAME_SIZE);
@@ -447,70 +447,140 @@ void setup() {
 }
 
 /**    MAIN FUNCTIONS    **/
-long loopTime = 0;
+
+int manual_override_counter = 0;
+// A simple count to "hold" a person's input
+// NOTE: This simply prevents the return from manual control to AI driven for a period of time, the
+//       game is still updated normally, including if the person changes their input
+#define MANUAL_OVERRIDE_THRESHOLD 1000
 void loop() {
-  
-  // put your main code here, to run repeatedly:
-  /*while (1) {
-    update_game();
-    if (Serial.available()) {
-      while (Serial.available()) {
-        Serial.read();
-      }
-      i = 0;
-      Serial.println("Reset count");
-    }
-    if (game.header == checksum()) {
-      Serial.print("Received packets = ");
-      Serial.println(++i);
-      print_game();
-      //delay(100); 
-    } 
-    if (game.command & MANUAL_OVERRIDE == MANUAL_OVERRIDE) {
-       Serial.println("Received instruction..."); 
-       game.command = NOP;
-       Serial.print("Dir: ");
-       switch(game.override_dir) {
-         case U:
-           Serial.println('U');
-           break;
-         case D:
-           Serial.println('D');
-           break;
-         case L:
-           Serial.println('L');
-           break;
-         case R:
-           Serial.println('R');
-           break;   
-       }
-       Serial.println("Processed instruction.");   
-    }
-  }*/
-  
-  // If header is wrong, return to receive update again
-  /*if (game.header != checksum()) {
-    Serial.println("ERR: Checksum invalid");
-    print_game();
-    return;
-  } else {
-    Serial.println("Checksum passed");
+  update_game();
+  // Whilst the last manual_override is in effect, don't update the current command
+  if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
+    // Once threshold reached, return to standard play (w/ AI)
+    manual_override_counter = 0;
+    curr_command = NOP;
+    #ifdef DEBUG_RF
+      Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
+    #endif
   }
-  switch(game.command) {
-    case STOP  : break; //Do something
-    case PAUSE : break; //Do something
-    case RESUME: break; //Do something
-    case HIDE  : break; //Do something
-    default    : break; //Do nothing 
-  }*/
-  /*Serial.print("Welcome player ");
-  Serial.println(PLAYER_STRING);
-  int i;
-  for(i=0;i<NUM_GHOSTS;i++){
-    Serial.print("Please enter ghost ");
-    Serial.println(i+1);
-    enter_robot_location(&game.g[i]);
-  }*/
+  // Make sure the game header is consistent with the checksum 
+  if (game.header == checksum()) {
+    // This section updates all relevant variables from the received RF packet
+    switch(game.command) {
+      case NOP   : // No special operation, run game as normal
+        // Do not permit normal operations if manual override, pause or stop are in effect
+        if (curr_command == MANUAL_OVERRIDE || curr_command == STOP || curr_command == PAUSE) { 
+          #ifdef DEBUG_RF
+            Serial.println("RF: NOP UNAVAILABLE");
+          #endif
+          break;
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: NOP ISSUED");
+        #endif
+        curr_command = NOP;
+        break;
+      case START : // Begin the game from the initial position after the end of a game
+        // Cannot start game unless robots are in the STOP state. (STOP can be issued at any time)
+        if (curr_command != STOP) {
+           #ifdef DEBUG_RF
+             Serial.println("RF: START UNAVAILABLE");
+           #endif
+           break; 
+        }
+        // Turn on all robots, ghosts must cascade out of middle section
+        // Return to normal play
+        // NOTE: Not sure if you want to do special motor control stuff using the START command
+        //       if so, just change this to START and add a case to the very next switch statement
+        
+        curr_command = START;
+        #ifdef DEBUG_RF
+          Serial.println("RF: START ISSUED");
+        #endif
+        break;
+      case STOP  : // To be sent when the game is over
+        if (game.override_dir & PAC_DEATH == PAC_DEATH) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: PACMAN DIED");
+          #endif  
+          // Call pacman death sequence
+        }
+        // Turn off all robots
+        // Remain stopped
+        #ifdef DEBUG_RF
+          Serial.println("RF: STOP ISSUED");
+        #endif
+        curr_command = STOP;
+        break; 
+      case PAUSE : // Pause the game temporarily
+        // Prevents sneaky resume of gameplay (STOP -> PAUSE -> RESUME, would be valid otherwise)
+        if (curr_command == STOP) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: PAUSE UNAVAILABLE");
+          #endif
+          break;
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: PAUSE ISSUED");
+        #endif
+        // Turn off all robot's motors, probably not the lights
+        // Remain paused until resume issued
+        curr_command = PAUSE;
+        break;
+      case RESUME:  // Resume from a pause
+        // Turn on all robot's motors
+        // CANNOT resume from a stop
+        if (curr_command == STOP) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: RESUME UNAVAILABLE");
+          #endif
+          break;
+        }
+        #ifdef DEBUG_RF
+          Serial.println("RF: RESUME ISSUED");
+        #endif
+        // Return to normal play
+        curr_command = NOP;
+        break;
+      case MANUAL_OVERRIDE  :
+        // Can't control while paused or stopped.
+        if (curr_command == STOP || curr_command == PAUSE) {
+          #ifdef DEBUG_RF
+            Serial.println("RF: MANUAL_OVERRIDE UNAVAILABLE");
+          #endif
+          break;
+        }
+        // Can't manually control ghosts
+        if (playerSelect != PACMAN)
+          break;
+        #ifdef DEBUG_RF
+          Serial.println("RF: MANUAL_OVERRIDE ISSUED");
+        #endif
+        curr_command = MANUAL_OVERRIDE;
+        
+      default    : 
+        #ifdef DEBUG_RF
+          Serial.println("RF: INVALID COMMAND");
+        #endif
+        break; //Do nothing 
+    }
+  } else {
+    #ifdef DEBUG_RF
+      Serial.println("RF: INVALID CHECKSUM");
+    #endif
+  } 
+ 
+  // The meat of controlling the motors + line sensing will be done here
+  switch(curr_command) {
+    case NOP             : /*Execute normal AI control functions*/ break;
+    case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
+    case PAUSE           : /*Continue to the next case...*/
+    case STOP            : /*If button pressed, change player*/ break;
+    default              : /*PAUSE, STOP, START*/ break;
+  }
+  
+  // Old code just in case you want a reminder.
   //map_expand();
   //collision_detect();
   if(Serial.available()){
@@ -542,13 +612,11 @@ void print_game() {
 void update_game() {
   int i;
   if (radio.available()) {
-    //Serial.println("Data available");
-    //digitalWrite(4,HIGH);
     radio.read((char *)&game,GAME_SIZE);
     delay(1);
   } else {
+    // Not achievable with checksum()
     game.header = -1;
-    //digitalWrite(4,LOW);
   }
 }
 
@@ -556,7 +624,7 @@ uint8_t checksum() {
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
-        sum += (((char *)g)[i] & (1 << j)) >> j;
+        sum += (((char *)&game)[i] & (1 << j)) >> j;
      }
   }
   return sum;
@@ -564,11 +632,127 @@ uint8_t checksum() {
 
 /**    MOVEMENT FUNCTIONS    **/
 
-bool detect_intersection() {
+uint8_t detect_intersection() {
   // returning true when robot has just reached an intersection
   // (to be completed)
-  return true;
+  if((millis()-lastIntersection)<2000){
+    return 0;
+  }
+  line_pos_t readTop = lineTop.get_line();
+  line_pos_t readRight = lineRight.get_line();
+  line_pos_t readBottom = lineBottom.get_line();
+  line_pos_t readLeft = lineLeft.get_line();
+  uint8_t trip = (readTop!=NONE)+(readRight!=NONE)+(readBottom!=NONE)+(readLeft!=NONE);
+  if (trip<2) {
+    return 0;
+  } else if(trip>2) {
+    while(!align2intersection()){}
+  } else if(readTop!=NONE&&readBottom!=NONE){
+    return 0;
+  } else if(readLeft!=NONE&&readRight!=NONE){
+    return 0;
+  } else {
+    while(!align2intersection()){}
+  }  
+  uint8_t options = 0;
+  readTop = lineTop.get_line();
+  readRight = lineRight.get_line();
+  readBottom = lineBottom.get_line();
+  readLeft = lineLeft.get_line();
+  if (trip<2) {
+    return 0;
+  } else if(trip>2) {
+    if(readTop!=NONE){
+      options|=U;
+    }
+    if(readRight!=NONE){
+      options|=R;
+    }
+    if(readBottom!=NONE){
+      options|=D;
+    }
+    if(readLeft!=NONE){
+      options|=L;
+    }
+    lastIntersection = millis();
+    return options;
+  } else if(readTop!=NONE&&readBottom!=NONE){
+    return 0;
+  } else if(readLeft!=NONE&&readRight!=NONE){
+    return 0;
+  } else {
+    //at corner, switches heading directly
+    if(readTop!=NONE&&globalHeading!='d'){
+      globalHeading='u';
+    } else if(readRight!=NONE&&globalHeading!='l'){
+      globalHeading='r';
+    } else if(readBottom!=NONE&&globalHeading!='u'){
+      globalHeading='d';
+    } else if(readLeft!=NONE&&globalHeading!='r'){
+      globalHeading='l';
+    }
+    lastIntersection = millis();
+    return 0;
+  }
 }
+
+bool align2intersection() {
+  int m_tL_speed = 0;
+  int m_tR_speed = 0;
+  int m_bL_speed = 0;
+  int m_bR_speed = 0;
+  bool ret = true;
+  line_pos_t readTop = lineTop.get_line();
+  line_pos_t readRight = lineRight.get_line();
+  line_pos_t readBottom = lineBottom.get_line();
+  line_pos_t readLeft = lineLeft.get_line();
+  if(readTop==LEFT||readTop==RIGHT){
+    ret = false;
+    if(readTop==LEFT){
+      m_tL_speed-=M_SLOW;
+      m_tR_speed-=M_SLOW;
+    } else {
+      m_tL_speed+=M_SLOW;
+      m_tR_speed+=M_SLOW;
+    }
+  }
+  if(readRight==LEFT||readRight==RIGHT){
+    ret = false;
+    if(readRight==LEFT){
+      m_tR_speed-=M_SLOW;
+      m_bR_speed-=M_SLOW;
+    } else {
+      m_tR_speed+=M_SLOW;
+      m_bR_speed+=M_SLOW;
+    }
+  }
+  if(readBottom==LEFT||readBottom==RIGHT){
+    ret = false;
+    if(readBottom==LEFT){
+      m_bR_speed-=M_SLOW;
+      m_bL_speed-=M_SLOW;
+    } else {
+      m_bR_speed+=M_SLOW;
+      m_bL_speed+=M_SLOW;
+    }
+  }
+  if(readLeft==LEFT||readTop==RIGHT){
+    ret = false;
+    if(readLeft==LEFT){
+      m_bL_speed-=M_SLOW;
+      m_tL_speed-=M_SLOW;
+    } else {
+      m_bL_speed+=M_SLOW;
+      m_tL_speed+=M_SLOW;
+    }
+  }
+  updateSpeed(&m_topLeft,m_tL_speed);
+  updateSpeed(&m_topRight,m_tR_speed);
+  updateSpeed(&m_bottomLeft,m_bL_speed);
+  updateSpeed(&m_bottomRight,m_bR_speed);
+  return ret;
+}  
+  
 
 void line_follow(){
   // use of pointers helps translate robot movement functions based on direction
@@ -578,7 +762,8 @@ void line_follow(){
   AccelStepper *m_backRight;
   LineSensor *lineFront;
   LineSensor *lineBack;
-  get_alignment(lineFront,lineBack,m_frontLeft,m_frontRight,m_backLeft,m_backRight);
+  get_motor_alignment(m_frontLeft,m_frontRight,m_backLeft,m_backRight);
+  get_line_alignment(lineFront,lineBack);
   line_pos_t readFront = lineFront->get_line();
   line_pos_t readBack = lineBack->get_line();
   if(readFront!=NONE&&readBack!=NONE){ // dual sensor control
@@ -625,7 +810,32 @@ void line_follow(){
   }
 }
 
-void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR){
+void get_line_alignment(LineSensor *l_F,LineSensor *l_B){
+    switch(globalHeading){
+    case 'u' :
+      l_F = &lineTop;
+      l_B = &lineBottom;
+      break;
+    case 'r' :
+      l_F = &lineRight;
+      l_B = &lineLeft;
+      break;
+    case 'd' :
+      l_F = &lineBottom;
+      l_B = &lineTop;
+      break;
+    case 'l' :
+      l_F = &lineLeft;
+      l_B = &lineRight;
+      break;
+    default : 
+      l_F = &lineTop;
+      l_B = &lineBottom;
+      break;
+  }
+}
+
+void get_motor_alignment(AccelStepper *m_fL,AccelStepper *m_fR,AccelStepper *m_bL,AccelStepper *m_bR){
   // global heading must have motor direction first
   switch(globalHeading){
     case 'u' :
@@ -633,40 +843,30 @@ void get_alignment(LineSensor *l_F,LineSensor *l_B,AccelStepper *m_fL,AccelStepp
       m_fR = &m_topRight;
       m_bL = &m_bottomLeft;
       m_bR = &m_bottomRight;
-      l_F = &lineTop;
-      l_B = &lineBottom;
       break;
     case 'r' :
       m_fL = &m_topRight;
       m_fR = &m_bottomRight;
       m_bL = &m_topLeft;
       m_bR = &m_bottomLeft;
-      l_F = &lineRight;
-      l_B = &lineLeft;
       break;
     case 'd' :
       m_fL = &m_bottomRight;
       m_fR = &m_bottomLeft;
       m_bL = &m_topRight;
       m_bR = &m_topLeft;
-      l_F = &lineBottom;
-      l_B = &lineTop;
       break;
     case 'l' :
       m_fL = &m_bottomLeft;
       m_fR = &m_topLeft;
       m_bL = &m_bottomRight;
       m_bR = &m_topRight;
-      l_F = &lineLeft;
-      l_B = &lineRight;
       break;
     default : 
       m_fL = &m_topLeft;
       m_fR = &m_topRight;
       m_bL = &m_bottomLeft;
       m_bR = &m_bottomRight;
-      l_F = &lineTop;
-      l_B = &lineBottom;
       break;
   }
 }
@@ -717,8 +917,8 @@ void set_goal(){
         goal.x = 1;
         goal.y = 1;
       } else if(aiTime-millis()<35000){
-        goal.x = g->pac.p.x;
-        goal.y = g->pac.p.y;
+        goal.x = game.pac.p.x;
+        goal.y = game.pac.p.y;
       } else {
         aiTime = millis();
       }
@@ -728,11 +928,11 @@ void set_goal(){
         goal.x = 9;
         goal.y = 9;
       } else if(aiTime-millis()<35000){
-        goal.x = g->pac.p.x;
-        goal.y = g->pac.p.y;
+        goal.x = game.pac.p.x;
+        goal.y = game.pac.p.y;
         int newX = goal.x;
         int newY = goal.y;
-        calc_new_square(&newX,&newY,g->pac.h,5);
+        calc_new_square(&newX,&newY,game.pac.h,5);
         map_constrain(&newX,&newY);
         goal.x = newX;
         goal.y = newY;
