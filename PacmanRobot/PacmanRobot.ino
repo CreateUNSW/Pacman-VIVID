@@ -202,8 +202,8 @@ RF24 radio(9,10);
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER GHOST2
-#define PLAYER_STRING "GHOST2"
+#define PLAYER PACMAN
+#define PLAYER_STRING "PACMAN"
 // will make this selectable via user interface on robot
 
 #define M_SPEED 300
@@ -314,8 +314,8 @@ void init_LEDs(){
 void player_LEDs(){
   switch(playerSelect){
     case PACMAN :
-      rgb[0] = 200;
-      rgb[1] = 200;
+      rgb[0] = 250;
+      rgb[1] = 250;
       rgb[2] = 0;
       break;
     case GHOST1 :
@@ -440,13 +440,16 @@ void setup() {
   //init_radio();
   randomSeed(micros());
   //Serial.println(GAME_SIZE);
-  //init_game(); 
+  //init_game();
+  init_LEDs();
+  player_LEDs(); 
   
 }
 
 /**    MAIN FUNCTIONS    **/
-int i = 0;
+long loopTime = 0;
 void loop() {
+  
   // put your main code here, to run repeatedly:
   /*while (1) {
     update_game();
@@ -516,6 +519,10 @@ void loop() {
   if(moveFlag){
     moveFlag = 0;
     move_robot();
+  }
+  if(millis()-loopTime>500){
+    pac_animation();
+    loopTime = millis();
   }
 }
 
@@ -909,7 +916,7 @@ void decide_direction(uint8_t options){
   }
   if(i==4){
     //newHeading = '0';
-    globalHeading = '0'
+    globalHeading = '0';
   } else {
     //newHeading = directionList[i];
     globalHeading = directionList[i];
