@@ -129,6 +129,7 @@ class LineSensor
 public:
   LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4);
   line_pos_t get_line();
+  void init_calibrate();
   void calibrate();
 private:
   uint8_t _pins[4];
@@ -164,6 +165,15 @@ line_pos_t LineSensor::get_line(){
     return RIGHT;
   } else {
     return CENTRE;
+  }
+}
+
+void LineSensor::init_calibrate(){
+  int i;
+  for(i=0;i<4;i++){
+    _max[i] = 0;
+    _min[i] = 1023;
+    _threshold[i] = 950;
   }
 }
 
@@ -203,10 +213,10 @@ AccelStepper m_topRight(AccelStepper::HALF4WIRE,27,29,23,25,false);
 AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,36,38,32,34,false);
 AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,37,39,33,35,false);
 
-LineSensor lineTop(15,14,13,12);
-LineSensor lineRight(0,1,2,3);
-LineSensor lineBottom(7,6,5,4);
-LineSensor lineLeft(8,9,10,11);
+LineSensor lineTop(3,2,1,0);
+LineSensor lineLeft(7,6,5,4);
+LineSensor lineBottom(11,10,9,8);
+LineSensor lineRight(15,14,13,12);
 
 RF24 radio(49,53);
 
@@ -218,8 +228,8 @@ RF24 radio(49,53);
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER GHOST1
-#define PLAYER_STRING "GHOST1"
+#define PLAYER PACMAN
+#define PLAYER_STRING "PACMAN"
 // will make this selectable via user interface on robot
 
 #define M_SPEED 300
@@ -237,8 +247,8 @@ playerType_t playerSelect = PLAYER;
 robot_t *thisRobot;
 //uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
-heading_t globalHeading = 'u';
-heading_t currentHeading = '0';
+heading_t globalHeading;
+heading_t currentHeading;
 unsigned long aiTime = 0;
 unsigned long loopTime = 0;
 unsigned long lastIntersection = 0;
@@ -259,6 +269,7 @@ int curr_command = STOP;
 void init_radio(void);
 void init_motors(void);
 void init_light_sensors(void);
+void calibrate_light_sensors(void);
 void init_LEDs(void);
 
 void ghost_animation(void);
@@ -320,6 +331,13 @@ void init_motors() {
 }
 
 void init_light_sensors(){
+  lineTop.init_calibrate();
+  lineRight.init_calibrate();
+  lineBottom.init_calibrate();
+  lineLeft.init_calibrate();
+}
+
+void calibrate_light_sensors(){
   lineTop.calibrate();
   lineRight.calibrate();
   lineBottom.calibrate();
@@ -459,10 +477,12 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
 //  Serial.println("Starting run...");
-  globalHeading = 'u';
+  globalHeading = 'r';
+  currentHeading = globalHeading;
   init_LEDs();
   //while(!Serial.available()){}
   init_motors();
+  init_light_sensors();
   randomSeed(micros());
   #ifdef USE_RADIO
     init_radio();
@@ -484,7 +504,7 @@ void setup() {
   delay(50);
   // Wait for second button press and continually calibrate
   while (digitalRead(45)) {
-    init_light_sensors();
+    calibrate_light_sensors();
   }
   delay(50);
   while (!digitalRead(45));
@@ -645,7 +665,7 @@ void loop() {
     debug_colour();
    // decide_direction(detect_intersection());
     uint8_t options;
-    if (options = detect_intersection() > 0) {
+    if ((options = detect_intersection()) > 0) {
       decide_direction(options);
     }
     
@@ -765,6 +785,7 @@ uint8_t detect_intersection() {
   readRight = lineRight.get_line();
   readBottom = lineBottom.get_line();
   readLeft = lineLeft.get_line();
+  trip = (readTop!=NONE)+(readRight!=NONE)+(readBottom!=NONE)+(readLeft!=NONE);
   if (trip<2) {
     return 0;
   } else if(trip>2) {
@@ -860,6 +881,7 @@ bool align2intersection() {
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
   m_bottomRight.runSpeed();
+  delay(5);
   return ret;
 }  
   
@@ -989,24 +1011,24 @@ void move_flag(){
 }
 
 void move_robot() {
-  if(currentHeading!=globalHeading){
-    if(currentHeading=='0'){
-      m_topLeft.enableOutputs();
-      m_topRight.enableOutputs();
-      m_bottomLeft.enableOutputs();
-      m_bottomRight.enableOutputs();
-    } else if(globalHeading=='0'){
-      updateSpeed(&m_topLeft,0);
-      updateSpeed(&m_topRight,0);
-      updateSpeed(&m_bottomLeft,0);
-      updateSpeed(&m_bottomRight,0);
-      m_topLeft.disableOutputs();
-      m_topRight.disableOutputs();
-      m_bottomLeft.disableOutputs();
-      m_bottomRight.disableOutputs();
-    }
-    currentHeading=globalHeading;
-  }
+//  if(currentHeading!=globalHeading){
+//    if(currentHeading=='0'){
+//      m_topLeft.enableOutputs();
+//      m_topRight.enableOutputs();
+//      m_bottomLeft.enableOutputs();
+//      m_bottomRight.enableOutputs();
+//    } else if(globalHeading=='0'){
+//      updateSpeed(&m_topLeft,0);
+//      updateSpeed(&m_topRight,0);
+//      updateSpeed(&m_bottomLeft,0);
+//      updateSpeed(&m_bottomRight,0);
+//      m_topLeft.disableOutputs();
+//      m_topRight.disableOutputs();
+//      m_bottomLeft.disableOutputs();
+//      m_bottomRight.disableOutputs();
+//    }
+//    currentHeading=globalHeading;
+//  }
   line_follow();
 //  updateSpeed(&m_topLeft,50);
 //      updateSpeed(&m_topRight,50);
@@ -1026,11 +1048,14 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
 }
 
 void decide_direction(uint8_t options){  
-//  heading_t newHeading;
+  //Serial.print("Global heading: ");
+  //Serial.println((char)globalHeading);
+  //Serial.print("Passed in line options: ");
+  //Serial.println(options,BIN);
+  heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
   float angle;
-  
   // Make doubling back impossible. (maybe enable for pacman later)
   heading_t opposite_heading;
   switch(globalHeading) {
@@ -1041,7 +1066,8 @@ void decide_direction(uint8_t options){
     default : opposite_heading = 0; break; 
   }
   options &= ~heading2binary(opposite_heading);
-  
+  //Serial.print("After removing opposite heading: ");
+  //Serial.println(options,BIN);
   goal.x = 0;
   goal.y = 0;
   #ifdef USE_RADIO
@@ -1060,7 +1086,23 @@ void decide_direction(uint8_t options){
   // This else is to
   #endif
   if(goal.x==0&&goal.y==0){ //random movement mode
-    angle = random(-179,181);
+    char randPriority[5] = "udlr";
+    uint8_t tempDir;
+    uint8_t randSelect;
+    uint8_t valid  = 0;
+    while(valid==0){
+      randSelect = millis()%4;
+      //Serial.print("rand select = ");
+      //Serial.println(randSelect);
+      
+      newHeading = randPriority[randSelect];
+      //Serial.println((char)newHeading);
+      tempDir = heading2binary(newHeading);
+      valid = ((tempDir&options)>0);
+      //delay(200);
+    }
+    globalHeading = newHeading;
+    return;  
 //    newHeading = opposite_heading;
 //    while (newHeading == opposite_heading) {
 //       headingList[4]
