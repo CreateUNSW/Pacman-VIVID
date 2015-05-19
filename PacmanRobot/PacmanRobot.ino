@@ -652,7 +652,14 @@ void loop() {
     }
   #endif
   
-  
+  if(millis()-loopTime>500){
+    if (playerSelect != PACMAN) {
+      ghost_animation();
+    } else {
+      pac_animation();
+    }
+    loopTime = millis();
+  }
   // Old code just in case you want a reminder.
   //map_expand();
   //collision_detect();
@@ -663,10 +670,7 @@ void loop() {
 //    moveFlag = 0;
 //    move_robot();
 //  }
-//  if(millis()-loopTime>500){
-//    ghost_animation();
-//    loopTime = millis();
-//  }
+
 }
 
 void print_game() {
@@ -849,6 +853,7 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
+  move_robot();
   return ret;
 }  
   
@@ -1015,29 +1020,42 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
 }
 
 void decide_direction(uint8_t options){
-  heading_t newHeading;
+//  heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
   float angle;
+  
   // Make doubling back impossible. (maybe enable for pacman later)
-  options &= ~heading2binary(globalHeading);
+  heading_t opposite_heading;
+  switch(globalHeading) {
+    case 'u': opposite_heading = 'd'; break;
+    case 'd': opposite_heading = 'u'; break;
+    case 'l': opposite_heading = 'r'; break;
+    case 'r': opposite_heading = 'l'; break;
+    default : opposite_heading = 0; break; 
+  }
+  options &= ~heading2binary(opposite_heading);
   
   goal.x = 0;
   goal.y = 0;
   if(goal.x==0&&goal.y==0){ //random movement mode
-    char dirList[4] = {'u', 'd', 'l', 'r'};
-    newHeading = 0;
-    do {
-      // heading is going to be a single bit set
-      uint8_t heading = options & (1 << random(0,4));
-      if (heading != 0) {
-        newHeading = binary2heading(heading);
-      }
-    } while (newHeading == 0);
-    globalHeading = newHeading;
-    return;
+    angle = random(-179,181);
+//    newHeading = opposite_heading;
+//    while (newHeading == opposite_heading) {
+//       headingList[4]
+//    }
+//      // heading is going to be a single bit set
+//     do {
+//      uint8_t headingList[4] = {U,L,R,D};
+//      uint8_t heading = options & headingList(random(0,4));
+//      if (heading != 0) {
+//        newHeading = binary2heading(heading);
+//      }
+//    } while (newHeading == 0);
+//    globalHeading = newHeading;
+//    return;
   }
-  if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
+  else if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
     switch(thisRobot->h){
       case 'u':
         angle = 90;
