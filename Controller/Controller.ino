@@ -1,6 +1,8 @@
 #include <SPI.h>
 #include "RF24.h"
 
+#define JOYSTICK
+
 /*
  * PACMAN RF Data Struct and utilities
  */
@@ -60,6 +62,13 @@ typedef struct _game_state {
 #define R 0b0100
 #define D 0b0010
 #define L 0b0001
+/*
+ * Joystick definitions
+ */
+#define XP 750
+#define XM 100
+#define YP 750
+#define YM 100
 
 /*
  * Radio definitions
@@ -80,7 +89,7 @@ void broadcast_game(void);
  */
  // Only need a single pipe due to one-way comms.
 const uint64_t pipe = 0xF0F0F0F0E1LL;
-RF24 radio(48,49);
+RF24 radio(9,10);
 
 game_state game;
 uint8_t __space[21];
@@ -102,22 +111,39 @@ void setup() {
   pinMode(right, INPUT);
   Serial.println("Now receiving inputs!");
 }
-
+int x,y;
 void loop() {
-  game.command = MANUAL_OVERRIDE;
-  // Read button presses
-  if (digitalRead(up)) 
-    game.override_dir = U;
-  else if (digitalRead(down))
-    game.override_dir = D;
-  else if (digitalRead(left))
-    game.override_dir = L;
-  else if (digitalRead(right))
-    game.override_dir = R;
-  else {
-    game.override_dir = 0;
-    game.command = NOP;
-  }
+  #ifdef JOYSTICK
+    x = analogRead(0);
+    y = analogRead(1);
+    game.command = MANUAL_OVERRIDE;
+    if (x > XP && (y < YP && y > YM)) {
+      game.override_dir = L;
+    } else if (x < XM && (y < YP && y > YM)) {
+      game.override_dir = R;
+    } else if (y < YM && (x < XP && x > XM)) {
+      game.override_dir = D;
+    } else if (y > YP && (x < XP && x > XM)) {
+      game.override_dir = U;
+    } else {
+      game.override_dir = 0;
+      game.command = NOP; 
+    }
+  #else
+    // Read button presses
+    if (digitalRead(up)) 
+      game.override_dir = U;
+    else if (digitalRead(down))
+      game.override_dir = D;
+    else if (digitalRead(left))
+      game.override_dir = L;
+    else if (digitalRead(right))
+      game.override_dir = R;
+    else {
+      game.override_dir = 0;
+      game.command = NOP;
+    }
+  #endif
   
   if (game.command == MANUAL_OVERRIDE) {
     // Send game information
