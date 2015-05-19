@@ -498,11 +498,12 @@ void setup() {
 
 /**    MAIN FUNCTIONS    **/
 
-int manual_override_counter = 0;
+unsigned long manual_override_timer = 0;
+heading_t override_dir = globalHeading;
 // A simple count to "hold" a person's input
 // NOTE: This simply prevents the return from manual control to AI driven for a period of time, the
 //       game is still updated normally, including if the person changes their input
-#define MANUAL_OVERRIDE_THRESHOLD 1000
+#define MANUAL_OVERRIDE_THRESHOLD 10000
 void loop() {
   if (!digitalRead(45)) {
     delay(50);
@@ -513,9 +514,9 @@ void loop() {
   #ifdef USE_RADIO
     update_game();
     // Whilst the last manual_override is in effect, don't update the current command
-    if (curr_command == MANUAL_OVERRIDE && manual_override_counter++ == MANUAL_OVERRIDE_THRESHOLD) {
+    if (curr_command == MANUAL_OVERRIDE && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
       // Once threshold reached, return to standard play (w/ AI)
-      manual_override_counter = 0;
+      manual_override_timer = 0;
       curr_command = NOP;
       #ifdef DEBUG_RF
         Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
@@ -614,6 +615,8 @@ void loop() {
           #ifdef DEBUG_RF
             Serial.println("RF: MANUAL_OVERRIDE ISSUED");
           #endif
+          // Set current time, only use manual override
+          manual_override_timer = millis();
           curr_command = MANUAL_OVERRIDE;
           
         default    : 
@@ -691,7 +694,7 @@ void update_game() {
   if (radio.available()) {
     game_state_t game_buf;
     radio.read((char *)&game_buf,GAME_SIZE);
-    if (game_buf.header == checksum() & game.command == MANUAL_OVERRIDE) {
+    if (game_buf.header == checksum() && game_buf.command == MANUAL_OVERRIDE) {
        game.command = MANUAL_OVERRIDE;
        game.override_dir = game_buf.override_dir;
        // Do NOT overwrite current pac and ghost locations and headings
@@ -1022,7 +1025,7 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
   }
 }
 
-void decide_direction(uint8_t options){
+void decide_direction(uint8_t options){  
 //  heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
@@ -1041,6 +1044,21 @@ void decide_direction(uint8_t options){
   
   goal.x = 0;
   goal.y = 0;
+  #ifdef USE_RADIO
+  if (curr_command == MANUAL_OVERRIDE) {
+    if (override_dir & options) {
+    // If the override direction is available, set that heading
+      globalHeading = binary2heading(override_dir);
+    } else if (heading2binary(globalHeading) & options) {
+      // If the current direction is available, maintain
+      globalHeading = globalHeading; // lol
+    } else {
+      globalHeading = 0;
+    }
+    return;
+  } 
+  // This else is to
+  #endif
   if(goal.x==0&&goal.y==0){ //random movement mode
     angle = random(-179,181);
 //    newHeading = opposite_heading;
