@@ -195,10 +195,10 @@ void LineSensor::calibrate(){
 // On a Trinket or Gemma we suggest changing this to 1
 #define LED_STRIP_PIN            43
 // eyes connected to pins 42,44,46,48
-#define EYE_LL  44
-#define EYE_LR  42
-#define EYE_RL  48
-#define EYE_RR  46
+#define EYE_LL  42
+#define EYE_LR  44
+#define EYE_RL  46
+#define EYE_RR  48
 
 uint8_t rgb[3];
 const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7,17,18,19}};
@@ -228,13 +228,13 @@ RF24 radio(49,53);
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER PACMAN
-#define PLAYER_STRING "PACMAN"
+#define PLAYER GHOST1
+#define PLAYER_STRING "GHOST1"
 // will make this selectable via user interface on robot
 
-#define M_SPEED 300
+#define M_SPEED 450
 #define M_FAST  500
-#define M_SLOW  100
+#define M_SLOW  200
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
 
@@ -789,6 +789,8 @@ uint8_t detect_intersection() {
   if (trip<2) {
     return 0;
   } else if(trip>2) {
+    red = 50; green = 0; blue = 0;
+    debug_colour();
     if(readTop!=NONE){
       options|=U;
     }
@@ -836,41 +838,41 @@ bool align2intersection() {
   if(readTop==LEFT||readTop==RIGHT){
     ret = false;
     if(readTop==LEFT){
-      m_tL_speed-=M_SLOW;
-      m_tR_speed-=M_SLOW;
+      m_tL_speed-=M_SPEED;
+      m_tR_speed-=M_SPEED;
     } else {
-      m_tL_speed+=M_SLOW;
-      m_tR_speed+=M_SLOW;
+      m_tL_speed+=M_SPEED;
+      m_tR_speed+=M_SPEED;
     }
   }
   if(readRight==LEFT||readRight==RIGHT){
     ret = false;
     if(readRight==LEFT){
-      m_tR_speed-=M_SLOW;
-      m_bR_speed-=M_SLOW;
+      m_tR_speed-=M_SPEED;
+      m_bR_speed-=M_SPEED;
     } else {
-      m_tR_speed+=M_SLOW;
-      m_bR_speed+=M_SLOW;
+      m_tR_speed+=M_SPEED;
+      m_bR_speed+=M_SPEED;
     }
   }
   if(readBottom==LEFT||readBottom==RIGHT){
     ret = false;
     if(readBottom==LEFT){
-      m_bR_speed-=M_SLOW;
-      m_bL_speed-=M_SLOW;
+      m_bR_speed-=M_SPEED;
+      m_bL_speed-=M_SPEED;
     } else {
-      m_bR_speed+=M_SLOW;
-      m_bL_speed+=M_SLOW;
+      m_bR_speed+=M_SPEED;
+      m_bL_speed+=M_SPEED;
     }
   }
-  if(readLeft==LEFT||readTop==RIGHT){
+  if(readLeft==LEFT||readLeft==RIGHT){
     ret = false;
     if(readLeft==LEFT){
-      m_bL_speed-=M_SLOW;
-      m_tL_speed-=M_SLOW;
+      m_bL_speed-=M_SPEED;
+      m_tL_speed-=M_SPEED;
     } else {
-      m_bL_speed+=M_SLOW;
-      m_tL_speed+=M_SLOW;
+      m_bL_speed+=M_SPEED;
+      m_tL_speed+=M_SPEED;
     }
   }
   updateSpeed(&m_topLeft,m_tL_speed);
@@ -881,7 +883,7 @@ bool align2intersection() {
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
   m_bottomRight.runSpeed();
-  delay(5);
+  //delay(5);
   return ret;
 }  
   
