@@ -853,7 +853,10 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
-  move_robot();
+  m_topLeft.runSpeed();
+  m_topRight.runSpeed();
+  m_bottomLeft.runSpeed();
+  m_bottomRight.runSpeed();
   return ret;
 }  
   
@@ -877,9 +880,9 @@ void line_follow(){
     //front pair of motors
     if(readFront==RIGHT){
       updateSpeed(m_frontLeft,M_SPEED);
-      updateSpeed(m_frontRight,0);
+      updateSpeed(m_frontRight,-M_SLOW);
     } else if(readFront==LEFT){
-      updateSpeed(m_frontLeft,0);
+      updateSpeed(m_frontLeft,M_SLOW);
       updateSpeed(m_frontRight,-M_SPEED);
     } else {
       updateSpeed(m_frontLeft,M_SPEED);
@@ -888,9 +891,9 @@ void line_follow(){
     //back pair of motors
     if(readBack==RIGHT){
       updateSpeed(m_backLeft,M_SPEED);
-      updateSpeed(m_backRight,0);
+      updateSpeed(m_backRight,-M_SLOW);
     } else if(readBack==LEFT){
-      updateSpeed(m_backLeft,0);
+      updateSpeed(m_backLeft,M_SLOW);
       updateSpeed(m_backRight,-M_SPEED);
     } else {
       updateSpeed(m_backLeft,M_SPEED);
@@ -900,13 +903,13 @@ void line_follow(){
     if(readFront==RIGHT||readBack==LEFT){
       updateSpeed(m_frontLeft,M_SPEED);
       updateSpeed(m_backRight,-M_SPEED);
-      updateSpeed(m_frontRight,0);
-      updateSpeed(m_backRight,0);
+      updateSpeed(m_frontRight,-M_SLOW);
+      updateSpeed(m_backLeft,M_SLOW);
     } else if(readFront==LEFT||readBack==RIGHT){
       updateSpeed(m_frontRight,-M_SPEED);
       updateSpeed(m_backLeft,M_SPEED);
-      updateSpeed(m_frontLeft,0);
-      updateSpeed(m_backRight,0);
+      updateSpeed(m_frontLeft,M_SLOW);
+      updateSpeed(m_backRight,-M_SLOW);
     } else {
       //lost the line
       updateSpeed(m_frontLeft,M_SPEED);
