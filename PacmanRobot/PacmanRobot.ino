@@ -228,13 +228,13 @@ RF24 radio(49,53);
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 
 // keep these consistent please
-#define PLAYER GHOST1
-#define PLAYER_STRING "GHOST1"
+#define PLAYER PACMAN
+//#define PLAYER_STRING "GHOST1"
 // will make this selectable via user interface on robot
 
-#define M_SPEED 450
+#define M_SPEED 300
 #define M_FAST  500
-#define M_SLOW  200
+#define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
 
@@ -248,7 +248,7 @@ robot_t *thisRobot;
 //uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading;
-heading_t currentHeading;
+volatile heading_t currentHeading;
 unsigned long aiTime = 0;
 unsigned long loopTime = 0;
 unsigned long lastIntersection = 0;
@@ -327,7 +327,7 @@ void init_motors() {
   m_bottomLeft.disableOutputs();
   m_bottomRight.disableOutputs();
   Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
-  Timer1.attachInterrupt( move_flag );  // interrupt sets motion flag
+  Timer1.attachInterrupt( move_robot );  // interrupt sets motion flag
 }
 
 void init_light_sensors(){
@@ -661,18 +661,18 @@ void loop() {
     }
   #else  
     // Non-map based motor control goes here
-    red = 0; green = 0; blue = 0;
-    debug_colour();
+    //red = 0; green = 0; blue = 0;
+    //debug_colour();
    // decide_direction(detect_intersection());
     uint8_t options;
     if ((options = detect_intersection()) > 0) {
       decide_direction(options);
     }
-    
-    if(moveFlag){
+    line_follow();
+    /*if(moveFlag){
       moveFlag = 0;
       move_robot();
-    }
+    }*/
   #endif
   
   if(millis()-loopTime>500){
@@ -768,8 +768,8 @@ uint8_t detect_intersection() {
     return 0;
   } else if(trip>2) {
     // red
-    red = 50; green = 0; blue = 0;
-    debug_colour();
+    //red = 50; green = 0; blue = 0;
+    //debug_colour();
     unsigned long time = millis();
     while(!align2intersection() && (millis() - time < MAX_ALIGN_TIME)){}
   } else if(readTop!=NONE&&readBottom!=NONE){
@@ -789,8 +789,8 @@ uint8_t detect_intersection() {
   if (trip<2) {
     return 0;
   } else if(trip>2) {
-    red = 50; green = 0; blue = 0;
-    debug_colour();
+    //red = 50; green = 0; blue = 0;
+    //debug_colour();
     if(readTop!=NONE){
       options|=U;
     }
@@ -879,10 +879,10 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
-  m_topLeft.runSpeed();
-  m_topRight.runSpeed();
-  m_bottomLeft.runSpeed();
-  m_bottomRight.runSpeed();
+  //m_topLeft.runSpeed();
+  //m_topRight.runSpeed();
+  //m_bottomLeft.runSpeed();
+  //m_bottomRight.runSpeed();
   //delay(5);
   return ret;
 }  
@@ -1013,29 +1013,25 @@ void move_flag(){
 }
 
 void move_robot() {
-//  if(currentHeading!=globalHeading){
-//    if(currentHeading=='0'){
-//      m_topLeft.enableOutputs();
-//      m_topRight.enableOutputs();
-//      m_bottomLeft.enableOutputs();
-//      m_bottomRight.enableOutputs();
-//    } else if(globalHeading=='0'){
-//      updateSpeed(&m_topLeft,0);
-//      updateSpeed(&m_topRight,0);
-//      updateSpeed(&m_bottomLeft,0);
-//      updateSpeed(&m_bottomRight,0);
-//      m_topLeft.disableOutputs();
-//      m_topRight.disableOutputs();
-//      m_bottomLeft.disableOutputs();
-//      m_bottomRight.disableOutputs();
-//    }
-//    currentHeading=globalHeading;
-//  }
-  line_follow();
-//  updateSpeed(&m_topLeft,50);
-//      updateSpeed(&m_topRight,50);
-//      updateSpeed(&m_bottomLeft,50);
-//      updateSpeed(&m_bottomRight,50);
+  if(currentHeading!=globalHeading){
+    if(currentHeading=='0'){
+      m_topLeft.enableOutputs();
+      m_topRight.enableOutputs();
+      m_bottomLeft.enableOutputs();
+      m_bottomRight.enableOutputs();
+    } else if(globalHeading=='0'){
+      updateSpeed(&m_topLeft,0);
+      updateSpeed(&m_topRight,0);
+      updateSpeed(&m_bottomLeft,0);
+      updateSpeed(&m_bottomRight,0);
+      m_topLeft.disableOutputs();
+      m_topRight.disableOutputs();
+      m_bottomLeft.disableOutputs();
+      m_bottomRight.disableOutputs();
+    }
+    currentHeading=globalHeading;
+  }
+  //line_follow();
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
