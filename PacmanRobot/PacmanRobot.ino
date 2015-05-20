@@ -232,8 +232,7 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
 #define PLAYER_STRING "GHOST1"
 // will make this selectable via user interface on robot
 
-#define M_SPEED 450
-#define M_FAST  500
+#define M_SPEED 350
 #define M_SLOW  200
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
@@ -327,7 +326,7 @@ void init_motors() {
   m_bottomLeft.disableOutputs();
   m_bottomRight.disableOutputs();
   Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
-  Timer1.attachInterrupt( move_flag );  // interrupt sets motion flag
+  Timer1.attachInterrupt( move_robot );  // interrupt calls motion (alternative: sets motion flag)
 }
 
 void init_light_sensors(){
@@ -664,15 +663,16 @@ void loop() {
     red = 0; green = 0; blue = 0;
     debug_colour();
    // decide_direction(detect_intersection());
+   line_follow();
     uint8_t options;
     if ((options = detect_intersection()) > 0) {
       decide_direction(options);
     }
     
-    if(moveFlag){
+    /*if(moveFlag){
       moveFlag = 0;
       move_robot();
-    }
+    }*/
   #endif
   
   if(millis()-loopTime>500){
@@ -879,11 +879,10 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
-  m_topLeft.runSpeed();
+  /*m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
-  m_bottomRight.runSpeed();
-  //delay(5);
+  m_bottomRight.runSpeed();*/// not needed when motion is on interrupt
   return ret;
 }  
   
@@ -1013,29 +1012,24 @@ void move_flag(){
 }
 
 void move_robot() {
-//  if(currentHeading!=globalHeading){
-//    if(currentHeading=='0'){
-//      m_topLeft.enableOutputs();
-//      m_topRight.enableOutputs();
-//      m_bottomLeft.enableOutputs();
-//      m_bottomRight.enableOutputs();
-//    } else if(globalHeading=='0'){
-//      updateSpeed(&m_topLeft,0);
-//      updateSpeed(&m_topRight,0);
-//      updateSpeed(&m_bottomLeft,0);
-//      updateSpeed(&m_bottomRight,0);
-//      m_topLeft.disableOutputs();
-//      m_topRight.disableOutputs();
-//      m_bottomLeft.disableOutputs();
-//      m_bottomRight.disableOutputs();
-//    }
-//    currentHeading=globalHeading;
-//  }
-  line_follow();
-//  updateSpeed(&m_topLeft,50);
-//      updateSpeed(&m_topRight,50);
-//      updateSpeed(&m_bottomLeft,50);
-//      updateSpeed(&m_bottomRight,50);
+  if(currentHeading!=globalHeading){
+    if(currentHeading=='0'){
+      m_topLeft.enableOutputs();
+      m_topRight.enableOutputs();
+      m_bottomLeft.enableOutputs();
+      m_bottomRight.enableOutputs();
+    } else if(globalHeading=='0'){
+      updateSpeed(&m_topLeft,0);
+      updateSpeed(&m_topRight,0);
+      updateSpeed(&m_bottomLeft,0);
+      updateSpeed(&m_bottomRight,0);
+      m_topLeft.disableOutputs();
+      m_topRight.disableOutputs();
+      m_bottomLeft.disableOutputs();
+      m_bottomRight.disableOutputs();
+    }
+    currentHeading=globalHeading;
+  }
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
