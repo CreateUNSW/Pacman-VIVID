@@ -4,14 +4,27 @@
 //#define DEBUG_AI   // Debug messages related to AI decisions
 //#define DEBUG_MAN  // Debug messages related to manual control decisions
 
+typedef enum {PACMAN=0, BLINKY, INKY, PINKY, CLYDE} playerType_t;
+
+// keep these consistent please
+#define PLAYER PACMAN
+#define PLAYER_STRING "PACMAN"
+// will make this selectable via user interface on robot
+
+
 uint8_t red = 0;
 uint8_t blue = 0;
 uint8_t green = 0;
 
 void debug_colour();
+// If any radio is used, activate this
+#if PLAYER==PACMAN
+  #define USE_RADIO
+#endif
+// If Matlab is also used, activate this
+//#define MATLAB
 
-//#define USE_RADIO
-  
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -205,7 +218,7 @@ const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7
 // top, right, bottom, left region
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      20// (max for Pacman?)
+#define NUMPIXELS      20  //max for Pacman
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
 AccelStepper m_topLeft(AccelStepper::HALF4WIRE,26,28,22,24,false);
@@ -220,17 +233,9 @@ LineSensor lineRight(15,14,13,12);
 
 RF24 radio(49,53);
 
-// to be inserted: button(s) (x1 or x2) for mode select
-
 /*
  * Local definitions
  */
-typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
-
-// keep these consistent please
-#define PLAYER GHOST1
-#define PLAYER_STRING "GHOST1"
-// will make this selectable via user interface on robot
 
 #define M_SPEED 350
 #define M_SLOW  200
@@ -257,8 +262,13 @@ game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
 uint8_t __space[21];
 
-// Initialise the robots as stopped
-int curr_command = STOP;
+#ifdef MATLAB
+  // Initialise the robots as stopped
+  int curr_command = STOP;
+#else
+  // Initialise robots as NOP (normal)
+  int curr_command = NOP;
+#endif
 
 
 /*
@@ -279,7 +289,7 @@ void update_game(void);
 void init_game_map(void);
 void print_game(void);
 void set_checksum(void);
-uint8_t checksum(void);
+uint8_t checksum(game_state_t *g);
 
 
 void move_robot(void);
@@ -371,17 +381,17 @@ void player_LEDs(){
       rgb[1] = 220;
       rgb[2] = 0;
       break;
-    case GHOST1 :
+    case BLINKY :
       rgb[0] = 200;
       rgb[1] = 0;
       rgb[2] = 0;
       break;
-    case GHOST2 :
+    case INKY :
       rgb[0] = 0;
       rgb[1] = 0;
       rgb[2] = 200;
       break;
-    case GHOST3 :
+    case PINKY :
       rgb[0] = 150;
       rgb[1] = 60;
       rgb[2] = 60;
@@ -476,16 +486,16 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
 //  Serial.println("Starting run...");
-  globalHeading = 'r';
+  globalHeading = 'u';
   currentHeading = globalHeading;
+  #ifdef USE_RADIO
+    init_radio();
+  #endif
   init_LEDs();
   //while(!Serial.available()){}
   init_motors();
   init_light_sensors();
   randomSeed(micros());
-  #ifdef USE_RADIO
-    init_radio();
-  #endif
   // purple
   red = 50; green = 0; blue = 50;
   debug_colour();
@@ -496,9 +506,8 @@ void setup() {
   while (digitalRead(45));
   delay(50);
   while (!digitalRead(45));
-  // software debounce with this delay
-  // blue
-  red = 0; green = 0; blue = 50;
+  // green
+  red = 0; green = 50; blue = 0;
   debug_colour();
   delay(50);
   // Wait for second button press and continually calibrate
@@ -538,11 +547,11 @@ void loop() {
       manual_override_timer = 0;
       curr_command = NOP;
       #ifdef DEBUG_RF
-        Serial.println("RF: MANUAL_OVERRIDE IN EFFECT");
+        Serial.println("RF: MANUAL_OVERRIDE PERIOD LAPSED : RETURN TO RANDOM PLAY");
       #endif
     }
     // Make sure the game header is consistent with the checksum 
-    if (game.header == checksum()) {
+    if (game.header == checksum(&game)) {
       // This section updates all relevant variables from the received RF packet
       switch(game.command) {
         case NOP   : // No special operation, run game as normal
@@ -629,41 +638,53 @@ void loop() {
             break;
           }
           // Can't manually control ghosts
-          if (playerSelect != PACMAN)
-            break;
+          if (playerSelect != PACMAN) {
+             Serial.println("RF: CANNOT MANUAL_OVERRIDE GHOSTS");
+              break; 
+          }
+           
           #ifdef DEBUG_RF
             Serial.println("RF: MANUAL_OVERRIDE ISSUED");
           #endif
           // Set current time, only use manual override
           manual_override_timer = millis();
           curr_command = MANUAL_OVERRIDE;
-          
+          break;
         default    : 
           #ifdef DEBUG_RF
-            Serial.println("RF: INVALID COMMAND");
+            Serial.print("RF: INVALID COMMAND """);
+            Serial.print(game.command);
+            Serial.println("""");
           #endif
           break; //Do nothing 
       }
-    } else {
-      #ifdef DEBUG_RF
-        Serial.println("RF: INVALID CHECKSUM");
-      #endif
-    } 
-    
+    }
     // The meat of controlling the motors + line sensing will be done here
+    uint8_t options = 0;
     switch(curr_command) {
-      case NOP             : /*Execute normal AI control functions*/ break;
-      case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ break;
+      case NOP             : /*Execute normal AI control functions*/ 
+        // Currently does not do AI
+        // Continue to the next case... 
+      case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ 
+        options = detect_intersection();
+        if (options > 0) {
+          decide_direction(options);
+        }
+        
+        if(moveFlag){
+          moveFlag = 0;
+          move_robot();
+        }
+        break;
       case PAUSE           : /*Continue to the next case...*/
       case STOP            : /*If button pressed, change player*/ break;
       default              : /*PAUSE, STOP, START*/ break;
     }
   #else  
     // Non-map based motor control goes here
-    red = 0; green = 0; blue = 0;
-    debug_colour();
-   // decide_direction(detect_intersection());
-   line_follow();
+    //    red = 0; green = 0; blue = 0;
+    //    debug_colour();
+    line_follow();
     uint8_t options;
     if ((options = detect_intersection()) > 0) {
       decide_direction(options);
@@ -683,17 +704,6 @@ void loop() {
     }
     loopTime = millis();
   }
-  // Old code just in case you want a reminder.
-  //map_expand();
-  //collision_detect();
-//  if(Serial.available()){
-//    globalHeading=Serial.read();
-//  }
-//  if(moveFlag){
-//    moveFlag = 0;
-//    move_robot();
-//  }
-
 }
 
 void print_game() {
@@ -711,17 +721,20 @@ void print_game() {
 /**    RADIO NETWORK FUNCTIONS    **/
 void update_game() {
   int i;
+  game_state_t game_buf;
+  
   if (radio.available()) {
-    game_state_t game_buf;
     radio.read((char *)&game_buf,GAME_SIZE);
-    if (game_buf.header == checksum() && game_buf.command == MANUAL_OVERRIDE) {
-       game.command = MANUAL_OVERRIDE;
+//    Serial.println(game_buf.header);
+//    Serial.println()
+    if (game_buf.header == checksum(&game_buf) && game_buf.command == MANUAL_OVERRIDE) {
+      game.command = MANUAL_OVERRIDE;
        game.override_dir = game_buf.override_dir;
        // Do NOT overwrite current pac and ghost locations and headings
        // A REALLY dodgy way to keep the game consistent, because the controller
        // doesn't have robot information
        set_checksum();
-    } else if (game_buf.header == checksum()) {
+    } else if (game_buf.header == checksum(&game_buf)) {
       // For normal game update, 
       game = game_buf;
     }
@@ -731,11 +744,11 @@ void update_game() {
   }
 }
 
-uint8_t checksum() {
+uint8_t checksum(game_state_t *g) {
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
-        sum += (((char *)&game)[i] & (1 << j)) >> j;
+        sum += (((char *)g)[i] & (1 << j)) >> j;
      }
   }
   return sum;
@@ -768,8 +781,8 @@ uint8_t detect_intersection() {
     return 0;
   } else if(trip>2) {
     // red
-    red = 50; green = 0; blue = 0;
-    debug_colour();
+//    red = 50; green = 0; blue = 0;
+//    debug_colour();
     unsigned long time = millis();
     while(!align2intersection() && (millis() - time < MAX_ALIGN_TIME)){}
   } else if(readTop!=NONE&&readBottom!=NONE){
@@ -789,8 +802,8 @@ uint8_t detect_intersection() {
   if (trip<2) {
     return 0;
   } else if(trip>2) {
-    red = 50; green = 0; blue = 0;
-    debug_colour();
+//    red = 50; green = 0; blue = 0;
+//    debug_colour();
     if(readTop!=NONE){
       options|=U;
     }
@@ -1078,8 +1091,7 @@ void decide_direction(uint8_t options){
       globalHeading = 0;
     }
     return;
-  } 
-  // This else is to
+  }
   #endif
   if(goal.x==0&&goal.y==0){ //random movement mode
     char randPriority[5] = "udlr";
@@ -1098,21 +1110,7 @@ void decide_direction(uint8_t options){
       //delay(200);
     }
     globalHeading = newHeading;
-    return;  
-//    newHeading = opposite_heading;
-//    while (newHeading == opposite_heading) {
-//       headingList[4]
-//    }
-//      // heading is going to be a single bit set
-//     do {
-//      uint8_t headingList[4] = {U,L,R,D};
-//      uint8_t heading = options & headingList(random(0,4));
-//      if (heading != 0) {
-//        newHeading = binary2heading(heading);
-//      }
-//    } while (newHeading == 0);
-//    globalHeading = newHeading;
-//    return;
+    return;
   }
   else if(thisRobot->p.y==goal.y&&thisRobot->p.x==goal.x){
     switch(thisRobot->h){
@@ -1179,7 +1177,7 @@ void set_goal(){
   switch(playerSelect){
     case PACMAN:
        break;
-    case GHOST1:
+    case BLINKY:
       if(aiTime-millis()<15000){
         goal.x = 1;
         goal.y = 1;
@@ -1190,7 +1188,7 @@ void set_goal(){
         aiTime = millis();
       }
       break;
-    case GHOST2:
+    case INKY:
       if(aiTime-millis()<15000){
         goal.x = 9;
         goal.y = 9;
@@ -1207,7 +1205,7 @@ void set_goal(){
         aiTime = millis();
       }
       break;
-    case GHOST3:
+    case PINKY:
       if(aiTime-millis()<15000){
         goal.x = 9;
         goal.y = 1;
@@ -1453,10 +1451,10 @@ void calc_new_square(int *x,int*y,heading_t h,int d){
 char binary2heading(uint8_t h) {
   char ret;
   switch(h){
-    case 0b0001 : ret = 'u'; break;
-    case 0b0010 : ret = 'r'; break;
-    case 0b0100 : ret = 'd'; break;
-    case 0b1000 : ret = 'l'; break;
+    case U : ret = 'u'; break;
+    case R : ret = 'r'; break;
+    case D : ret = 'd'; break;
+    case L : ret = 'l'; break;
     default  : ret = 0b0000; break;
   }
   return(ret);
