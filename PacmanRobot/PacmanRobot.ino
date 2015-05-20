@@ -19,7 +19,7 @@ uint8_t green = 0;
 void debug_colour();
 // If any radio is used, activate this
 #if PLAYER==PACMAN
-  #define USE_RADIO
+  //#define USE_RADIO
 #endif
 // If Matlab is also used, activate this
 //#define MATLAB
@@ -197,7 +197,7 @@ void LineSensor::calibrate(){
     val = analogRead(_pins[i]);
     _max[i] = max(_max[i],val);
     _min[i] = min(_min[i],val);
-    _threshold[i] = (_max[i]+_min[i])/2;
+    _threshold[i] = (_max[i]+_min[i])/2.5;
   }
 }
 /*
@@ -237,7 +237,7 @@ RF24 radio(49,53);
  * Local definitions
  */
 
-#define M_SPEED 350
+#define M_SPEED 280
 #define M_SLOW  200
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
@@ -331,6 +331,7 @@ void init_motors() {
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  
   m_topLeft.disableOutputs();
   m_topRight.disableOutputs();
   m_bottomLeft.disableOutputs();
@@ -486,8 +487,7 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
 //  Serial.println("Starting run...");
-  globalHeading = 'u';
-  currentHeading = globalHeading;
+  globalHeading = '0';
   #ifdef USE_RADIO
     init_radio();
   #endif
@@ -519,9 +519,10 @@ void setup() {
   
   //Serial.println(GAME_SIZE);
   //init_game();
-  
+  red = 0; green = 0; blue = 0;
+  debug_colour();
   player_LEDs(); 
-  
+  globalHeading = 'u';
 }
 
 /**    MAIN FUNCTIONS    **/
@@ -666,15 +667,16 @@ void loop() {
         // Currently does not do AI
         // Continue to the next case... 
       case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ 
+        line_follow();
         options = detect_intersection();
         if (options > 0) {
           decide_direction(options);
         }
         
-        if(moveFlag){
+        /*if(moveFlag){
           moveFlag = 0;
           move_robot();
-        }
+        }*/
         break;
       case PAUSE           : /*Continue to the next case...*/
       case STOP            : /*If button pressed, change player*/ break;
@@ -684,12 +686,12 @@ void loop() {
     // Non-map based motor control goes here
     //    red = 0; green = 0; blue = 0;
     //    debug_colour();
-    line_follow();
+    
     uint8_t options;
     if ((options = detect_intersection()) > 0) {
       decide_direction(options);
     }
-    
+    line_follow();
     /*if(moveFlag){
       moveFlag = 0;
       move_robot();
@@ -851,41 +853,41 @@ bool align2intersection() {
   if(readTop==LEFT||readTop==RIGHT){
     ret = false;
     if(readTop==LEFT){
-      m_tL_speed-=M_SPEED;
-      m_tR_speed-=M_SPEED;
+      m_tL_speed-=M_SLOW;
+      m_tR_speed-=M_SLOW;
     } else {
-      m_tL_speed+=M_SPEED;
-      m_tR_speed+=M_SPEED;
+      m_tL_speed+=M_SLOW;
+      m_tR_speed+=M_SLOW;
     }
   }
   if(readRight==LEFT||readRight==RIGHT){
     ret = false;
     if(readRight==LEFT){
-      m_tR_speed-=M_SPEED;
-      m_bR_speed-=M_SPEED;
+      m_tR_speed-=M_SLOW;
+      m_bR_speed-=M_SLOW;
     } else {
-      m_tR_speed+=M_SPEED;
-      m_bR_speed+=M_SPEED;
+      m_tR_speed+=M_SLOW;
+      m_bR_speed+=M_SLOW;
     }
   }
   if(readBottom==LEFT||readBottom==RIGHT){
     ret = false;
     if(readBottom==LEFT){
-      m_bR_speed-=M_SPEED;
-      m_bL_speed-=M_SPEED;
+      m_bR_speed-=M_SLOW;
+      m_bL_speed-=M_SLOW;
     } else {
-      m_bR_speed+=M_SPEED;
-      m_bL_speed+=M_SPEED;
+      m_bR_speed+=M_SLOW;
+      m_bL_speed+=M_SLOW;
     }
   }
   if(readLeft==LEFT||readLeft==RIGHT){
     ret = false;
     if(readLeft==LEFT){
-      m_bL_speed-=M_SPEED;
-      m_tL_speed-=M_SPEED;
+      m_bL_speed-=M_SLOW;
+      m_tL_speed-=M_SLOW;
     } else {
-      m_bL_speed+=M_SPEED;
-      m_tL_speed+=M_SPEED;
+      m_bL_speed+=M_SLOW;
+      m_tL_speed+=M_SLOW;
     }
   }
   updateSpeed(&m_topLeft,m_tL_speed);
@@ -1031,18 +1033,16 @@ void move_robot() {
       m_topRight.enableOutputs();
       m_bottomLeft.enableOutputs();
       m_bottomRight.enableOutputs();
-    } else if(globalHeading=='0'){
-      updateSpeed(&m_topLeft,0);
-      updateSpeed(&m_topRight,0);
-      updateSpeed(&m_bottomLeft,0);
-      updateSpeed(&m_bottomRight,0);
-      m_topLeft.disableOutputs();
-      m_topRight.disableOutputs();
-      m_bottomLeft.disableOutputs();
-      m_bottomRight.disableOutputs();
     }
     currentHeading=globalHeading;
   }
+  if(globalHeading=='0'){
+    m_topLeft.disableOutputs();
+    m_topRight.disableOutputs();
+    m_bottomLeft.disableOutputs();
+    m_bottomRight.disableOutputs();
+  }
+    
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
