@@ -225,7 +225,7 @@ RF24 radio(49,53);
 /*
  * Local definitions
  */
-typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3, GHOST4} playerType_t;
+typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
 
 // keep these consistent please
 #define PLAYER PACMAN
@@ -494,13 +494,34 @@ void setup() {
   digitalWrite(47,LOW);
   pinMode(45,INPUT_PULLUP);
   // Wait for first button press
-  while (digitalRead(45));
+  while(digitalRead(45)){
+  }
   delay(50);
-  while (!digitalRead(45));
+  bool longTouch = false;
+  int switchPlayer = 0;
+  unsigned long buttonTime;
+  while(longTouch==false){ 
+    playerSelect = (playerType_t)switchPlayer;
+    player_LEDs();
+    while (digitalRead(45));
+    delay(50);
+    buttonTime = millis();
+    while (!digitalRead(45)){
+      if(millis()-buttonTime>2000){
+        longTouch = true;
+        break;
+      }
+    }
+    if(longTouch==false){
+      switchPlayer = (switchPlayer+1)%4;
+    }
+  }
+  
   // software debounce with this delay
   // blue
-  red = 0; green = 0; blue = 50;
+  red = 0; green = 50; blue = 0;
   debug_colour();
+  while(!digitalRead(45));
   delay(50);
   // Wait for second button press and continually calibrate
   while (digitalRead(45)) {
