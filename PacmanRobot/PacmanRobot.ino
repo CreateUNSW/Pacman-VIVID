@@ -227,13 +227,12 @@ RF24 radio(49,53);
  */
 typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
 
+// NO LONGER NEEDED
 // keep these consistent please
-#define PLAYER PACMAN
+//#define PLAYER PACMAN
 //#define PLAYER_STRING "GHOST1"
-// will make this selectable via user interface on robot
 
 #define M_SPEED 300
-#define M_FAST  500
 #define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
@@ -243,9 +242,8 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
  */
 
 volatile int moveFlag = 0;
-playerType_t playerSelect = PLAYER;
+playerType_t playerSelect;// = PLAYER;
 robot_t *thisRobot;
-//uint16_t robotSpeed = STEPPER_SPEED;
 position_t goal;
 heading_t globalHeading;
 volatile heading_t currentHeading;
@@ -292,7 +290,7 @@ void line_follow(void);
 bool align2intersection(void);
 
 void set_goal(void);
-void map_expand(void);
+uint8_t map_expand(void);
 bool is_intersection(int x, int y);
 bool is_open(int x, int y, heading_t dir);
 bool collision_detect(heading_t h);
@@ -318,10 +316,15 @@ void init_radio() {
 }
 
 void init_motors() {
+  Timer1.detachInterrupt();
   m_topLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  m_topLeft.setSpeed(0);
+  m_topRight.setSpeed(0);
+  m_bottomLeft.setSpeed(0);
+  m_bottomRight.setSpeed(0);
   m_topLeft.disableOutputs();
   m_topRight.disableOutputs();
   m_bottomLeft.disableOutputs();
@@ -497,8 +500,10 @@ void setup() {
   while(digitalRead(45)){
   }
   delay(50);
+  while(!digitalRead(45));
+  delay(50);
   bool longTouch = false;
-  int switchPlayer = 0;
+  int switchPlayer = 0; // starts with PACMAN
   unsigned long buttonTime;
   while(longTouch==false){ 
     playerSelect = (playerType_t)switchPlayer;
@@ -704,17 +709,6 @@ void loop() {
     }
     loopTime = millis();
   }
-  // Old code just in case you want a reminder.
-  //map_expand();
-  //collision_detect();
-//  if(Serial.available()){
-//    globalHeading=Serial.read();
-//  }
-//  if(moveFlag){
-//    moveFlag = 0;
-//    move_robot();
-//  }
-
 }
 
 void print_game() {
@@ -900,19 +894,11 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
-  //m_topLeft.runSpeed();
-  //m_topRight.runSpeed();
-  //m_bottomLeft.runSpeed();
-  //m_bottomRight.runSpeed();
-  //delay(5);
   return ret;
 }  
   
 
 void line_follow(){
-  // white
-  //red = 50; green = 50; blue = 50;
-  //debug_colour();
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -1052,7 +1038,6 @@ void move_robot() {
     }
     currentHeading=globalHeading;
   }
-  //line_follow();
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
@@ -1346,7 +1331,7 @@ bool collision_detect(heading_t h){
   return collision;
 }
   
-void map_expand(){
+uint8_t map_expand(){
   int x = thisRobot->p.x;
   int y = thisRobot->p.y;
   char h = thisRobot->h;
@@ -1379,7 +1364,7 @@ void map_expand(){
     r = expand(&tempX,&tempY,'d');
     if(r==NULL) {
       if(!collision_detect('d')){
-        Serial.println("Down path available");
+        //Serial.println("Down path available");
         options|=D;
       }
     }
@@ -1389,18 +1374,18 @@ void map_expand(){
     r = expand(&tempX,&tempY,'l');
     if(r==NULL) {
       if(!collision_detect('l')){
-        Serial.println("Left path available");
+        //Serial.println("Left path available");
         options|=L;
       }
     }
   }
-  decide_direction(options);
+  return(options);
 }
 
 uint8_t* expand(int *x,int *y, heading_t h){
   // Debug output
-  Serial.print("Checking: ");
-  Serial.print(*x); Serial.print(" "); Serial.println(*y);
+  //Serial.print("Checking: ");
+  //Serial.print(*x); Serial.print(" "); Serial.println(*y);
   if(*x<1||*x>9||*y<1||*y>9){
     return NULL;
   }
@@ -1480,7 +1465,7 @@ char binary2heading(uint8_t h) {
     case 0b0010 : ret = 'r'; break;
     case 0b0100 : ret = 'd'; break;
     case 0b1000 : ret = 'l'; break;
-    default  : ret = 0b0000; break;
+    default  : ret = '0'; break;
   }
   return(ret);
   
