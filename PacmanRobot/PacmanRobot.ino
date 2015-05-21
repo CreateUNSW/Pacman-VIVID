@@ -285,7 +285,7 @@ void print_game(void);
 void set_checksum(void);
 uint8_t checksum(game_state_t *g);
 
-
+void init_heading(void);
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
@@ -485,8 +485,8 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
 //  Serial.println("Starting run...");
-  globalHeading = 'r';
-  currentHeading = globalHeading;
+  globalHeading = '0';
+  currentHeading = '0';
   init_LEDs();
   //while(!Serial.available()){}
   init_motors();
@@ -540,7 +540,6 @@ void setup() {
   delay(50);
   while (!digitalRead(45));
   
-  player_LEDs(); 
   #ifdef USE_RADIO
   // Init pacman waiting for input, will time-out after 10 seconds
   if (playerSelect == PACMAN) {
@@ -548,6 +547,9 @@ void setup() {
     manual_override_timer = millis();
   }
   #endif
+  //init_game();
+  init_heading();
+  player_LEDs(); 
 }
 
 /**    MAIN FUNCTIONS    **/
@@ -787,6 +789,24 @@ void set_checksum() {
 }
 
 /**    MOVEMENT FUNCTIONS    **/
+void init_heading(){
+  line_pos_t readTop = lineTop.get_line();
+  line_pos_t readRight = lineRight.get_line();
+  line_pos_t readBottom = lineBottom.get_line();
+  line_pos_t readLeft = lineLeft.get_line();
+  if(readTop!=NONE){
+    globalHeading = 'u';
+  } else if(readRight!=NONE){
+    globalHeading = 'r';
+  } else if(readLeft!=NONE){
+    globalHeading = 'l';
+  } else if(readBottom!=NONE){
+    globalHeading = 'd';
+  } else {
+    //something is probably wrong
+    globalHeading = 'u';
+  }
+}
 
 uint8_t detect_intersection() {
   // returning true when robot has just reached an intersection
@@ -845,18 +865,36 @@ uint8_t detect_intersection() {
   } else if(readLeft!=NONE&&readRight!=NONE){
     return 0;
   } else {
-    //at corner, switches heading directly
-    if(readTop!=NONE&&globalHeading!='d'){
-      globalHeading='u';
-    } else if(readRight!=NONE&&globalHeading!='l'){
-      globalHeading='r';
-    } else if(readBottom!=NONE&&globalHeading!='u'){
-      globalHeading='d';
-    } else if(readLeft!=NONE&&globalHeading!='r'){
-      globalHeading='l';
+    if(playerSelect==PACMAN){
+      // treat as intersection
+      if(readTop!=NONE){
+        options|=U;
+      }
+      if(readRight!=NONE){
+        options|=R;
+      }
+      if(readBottom!=NONE){
+        options|=D;
+      }
+      if(readLeft!=NONE){
+        options|=L;
+      }
+      lastIntersection = millis();
+      return options;
+    } else {
+      // do not treat as intersection
+      if(readTop!=NONE&&globalHeading!='d'){
+        globalHeading='u';
+      } else if(readRight!=NONE&&globalHeading!='l'){
+        globalHeading='r';
+      } else if(readBottom!=NONE&&globalHeading!='u'){
+        globalHeading='d';
+      } else if(readLeft!=NONE&&globalHeading!='r'){
+        globalHeading='l';
+      }
+      lastIntersection = millis();
+      return 0;
     }
-    lastIntersection = millis();
-    return 0;
   }
 }
 
