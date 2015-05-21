@@ -842,18 +842,36 @@ uint8_t detect_intersection() {
   } else if(readLeft!=NONE&&readRight!=NONE){
     return 0;
   } else {
-    //at corner, switches heading directly
-    if(readTop!=NONE&&globalHeading!='d'){
-      globalHeading='u';
-    } else if(readRight!=NONE&&globalHeading!='l'){
-      globalHeading='r';
-    } else if(readBottom!=NONE&&globalHeading!='u'){
-      globalHeading='d';
-    } else if(readLeft!=NONE&&globalHeading!='r'){
-      globalHeading='l';
+    if(playerSelect==PACMAN){
+      // treat as intersection
+      if(readTop!=NONE){
+        options|=U;
+      }
+      if(readRight!=NONE){
+        options|=R;
+      }
+      if(readBottom!=NONE){
+        options|=D;
+      }
+      if(readLeft!=NONE){
+        options|=L;
+      }
+      lastIntersection = millis();
+      return options;
+    } else {
+      // do not treat as intersection
+      if(readTop!=NONE&&globalHeading!='d'){
+        globalHeading='u';
+      } else if(readRight!=NONE&&globalHeading!='l'){
+        globalHeading='r';
+      } else if(readBottom!=NONE&&globalHeading!='u'){
+        globalHeading='d';
+      } else if(readLeft!=NONE&&globalHeading!='r'){
+        globalHeading='l';
+      }
+      lastIntersection = millis();
+      return 0;
     }
-    lastIntersection = millis();
-    return 0;
   }
 }
 
