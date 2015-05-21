@@ -280,7 +280,7 @@ void print_game(void);
 void set_checksum(void);
 uint8_t checksum(void);
 
-
+void init_heading(void);
 void move_robot(void);
 void move_flag(void);
 void updateSpeed(AccelStepper *thisMotor,int newSpeed);
@@ -480,8 +480,8 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);
 //  Serial.println("Starting run...");
-  globalHeading = 'r';
-  currentHeading = globalHeading;
+  globalHeading = '0';
+  currentHeading = '0';
   init_LEDs();
   //while(!Serial.available()){}
   init_motors();
@@ -537,9 +537,8 @@ void setup() {
   
   //Serial.println(GAME_SIZE);
   //init_game();
-  
+  init_heading();
   player_LEDs(); 
-  
 }
 
 /**    MAIN FUNCTIONS    **/
@@ -767,6 +766,24 @@ void set_checksum() {
 }
 
 /**    MOVEMENT FUNCTIONS    **/
+void init_heading(){
+  line_pos_t readTop = lineTop.get_line();
+  line_pos_t readRight = lineRight.get_line();
+  line_pos_t readBottom = lineBottom.get_line();
+  line_pos_t readLeft = lineLeft.get_line();
+  if(readTop!=NONE){
+    globalHeading = 'u';
+  } else if(readRight!=NONE){
+    globalHeading = 'r';
+  } else if(readLeft!=NONE){
+    globalHeading = 'l';
+  } else if(readBottom!=NONE){
+    globalHeading = 'd';
+  } else {
+    //something is probably wrong
+    globalHeading = 'u';
+  }
+}
 
 uint8_t detect_intersection() {
   // returning true when robot has just reached an intersection
