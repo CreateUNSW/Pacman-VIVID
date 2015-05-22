@@ -23,7 +23,7 @@ global cam;
 
 % Edit the above text to modify the response to help PacGui2
 
-% Last Modified by GUIDE v2.5 15-May-2015 02:54:41
+% Last Modified by GUIDE v2.5 22-May-2015 00:16:41
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -59,6 +59,7 @@ global cam;
 global plotHandle;
 global dotPoints;
 global dotPointEntry;
+global boundary;
 dotPointEntry = 0;
 dotPoints = zeros(81,2);
 handles.output = hObject;
@@ -69,8 +70,9 @@ handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
 camera_start('calibration',handles.axes2);
 hold on;
 plotHandle.h1 = plot(NaN,NaN,'r*');
-plotHandle.h2 = line(NaN,NaN,'Color','g');
-
+for i=1:16
+    plotHandle.h2(i) = line(NaN,NaN,'Color','g');
+end
 
 % Update handles structure
 guidata(hObject, handles);
@@ -167,8 +169,6 @@ if dotPointEntry<=0
 end
 dotPoints(dotPointEntry,:) = [0,0];
 dotPointEntry = dotPointEntry - 1;
-children = plotHandle.h1.Parent.Children;
-delete(findobj(children,'Type','Line'));
 set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
 
 
@@ -182,19 +182,23 @@ global dotPointEntry;
 global plotHandle;
 dotPoints = zeros(81,2);
 dotPointEntry = 0;
-children = plotHandle.h1.Parent.Children;
-delete(findobj(children,'Type','Line'));
 set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
+for i=1:16
+    set(plotHandle.h2(i),'xdata',NaN,'ydata',NaN);
+end
 
 function LogPoint(hObject, eventdata)
 global plotHandle;
 global dotPoints;
 global dotPointEntry;
+global boundary;
 if dotPointEntry==81
     return;
 end;
 dotPointEntry = dotPointEntry+1;
 axesHandle = get(hObject,'Parent');
+scale(1) = length(hObject.CData(:,1,1))/range(axesHandle.YLim);
+scale(2) = length(hObject.CData(1,:,1))/range(axesHandle.XLim);
 clickCoord = get(axesHandle, 'CurrentPoint');
 dotPoints(dotPointEntry,:) = clickCoord(1,1:2);
 set(plotHandle.h1,'xdata',dotPoints(:,1),'ydata',dotPoints(:,2));
@@ -204,10 +208,13 @@ if dotPointEntry==81
     yy = mean(T(:,:,2));
     xx = mean(T(:,:,1)');
     axes = plotHandle.h2.Parent;
-    for i=1:9
+    for i=1:8
+        boundary.xx(i) = (xx(i)+xx(i+1))/2*scale(1);
+        boundary.yy(i) = (yy(i)+yy(i+1))/2*scale(2);
+    
 %         set(plotHandle.h2,'xdata',[xx(i),xx(i)],'ydata',[0,360]);
-          line([xx(i),xx(i)],[0,360],'Color','g');
-          line([0,480],[yy(i),yy(i)],'Color','g');
+      set(plotHandle.h2(2*i-1),'xdata',[boundary.xx(i),boundary.xx(i)]/scale(1),'ydata',[0,360]);
+      set(plotHandle.h2(2*i),'xdata',[0,480],'ydata',[boundary.yy(i),boundary.yy(i)]/scale(2));
     end;
 %     linex = [xx,xx;
     
@@ -289,27 +296,63 @@ if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColo
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
 
-% --- Executes on button press
-function zoom_Callback(hObject, eventdata, handles)
-% hObject    handle to zoom (see GCBO)
+% --- Executes on button press in loadConfig.
+function loadConfig_Callback(hObject, eventdata, handles)
+% hObject    handle to loadConfig (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'Value') returns position of slider
-%        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
 global cam;
-this = get(hObject,'Value');
-if this==0
-    cam.Zoom = 1;
-else
-    cam.Zoom = 2;
+global dotPoints;
+global dotPointEntry;
+global boundary;
+try
+    s = load('camConfig.mat');
+    camConfig = s.camConfig;
+    cam.WhiteBalance = camConfig.WhiteBalance;
+    cam.Saturation = camConfig.Saturation;
+    cam.ExposureMode = camConfig.ExposureMode;
+    cam.Brightness = camConfig.Brightness;
+    cam.Exposure = camConfig.Exposure;
+    cam.WhiteBalanceMode = camConfig.WhiteBalanceMode;
+    cam.Contrast = camConfig.Contrast;
+    set(handles.whitebalance,'Value',camConfig.WhiteBalance);
+    set(handles.saturation,'Value',camConfig.Saturation);
+    set(handles.brightness,'Value',camConfig.Brightness);
+    set(handles.exposure,'Value',camConfig.Exposure);
+    set(handles.contrast,'Value',camConfig.Contrast);
+catch MExc
+    disp('Error loading camera config file');
+end
+try
+    t = load('intConfig.mat');
+    dotPoints = t.dotPoints;
+    dotPointEntry = 81;
+    boundary = t.boundary;
+catch MExc
+    disp('No stored map config file');
 end
 
-% --- Executes during object creation, after setting all properties.
-function zoom_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to zoom (see GCBO)
+
+% --- Executes on button press in saveConfig.
+function saveConfig_Callback(hObject, eventdata, handles)
+% hObject    handle to saveConfig (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
+% handles    structure with handles and user data (see GUIDATA)
+global cam;
+global dotPoints;
+global dotPointEntry;
+global boundary;
+camConfig.WhiteBalance = cam.WhiteBalance;
+camConfig.Saturation = cam.Saturation;
+camConfig.ExposureMode = cam.ExposureMode;
+camConfig.Brightness = cam.Brightness;
+camConfig.Exposure = cam.Exposure;
+camConfig.WhiteBalanceMode = cam.WhiteBalanceMode;
+camConfig.Contrast = cam.Contrast;
+save('camConfig','camConfig');
+if dotPointEntry==81
+    save('intConfig','dotPoints','boundary');
+end
 
 
 

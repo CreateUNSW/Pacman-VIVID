@@ -22,7 +22,7 @@ function varargout = PacGui(varargin)
 
 % Edit the above text to modify the response to help PacGui
 
-% Last Modified by GUIDE v2.5 16-May-2015 17:39:17
+% Last Modified by GUIDE v2.5 22-May-2015 02:11:17
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -57,6 +57,7 @@ function PacGui_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 
 handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
+hold on;
 % preview(cam,handles.axes2);
 camera_start('game',handles.axes2);
 
@@ -77,12 +78,32 @@ function varargout = PacGui_OutputFcn(hObject, eventdata, handles)
 % Get default command line output from handles structure
 varargout{1} = handles.output;
 
+% --- Executes on button press in load_cam_calibration.
+function load_cam_calibration_Callback(hObject, eventdata, handles)
+% hObject    handle to load_cam_calibration (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global cam;
+try
+    s = load('camConfig.mat');
+    camConfig = s.camConfig;
+    cam.WhiteBalance = camConfig.WhiteBalance;
+    cam.Saturation = camConfig.Saturation;
+    cam.ExposureMode = camConfig.ExposureMode;
+    cam.Brightness = camConfig.Brightness;
+    cam.Exposure = camConfig.Exposure;
+    cam.WhiteBalanceMode = camConfig.WhiteBalanceMode;
+    cam.Contrast = camConfig.Contrast;
+catch MExc
+    disp('Error loading camera config file');
+end
 
 % --- Executes on button press in start_game.
 function start_game_Callback(hObject, eventdata, handles)
 % hObject    handle to start_game (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+game_command('start');
 
 
 % --- Executes on button press in stopgame.
@@ -90,6 +111,7 @@ function stopgame_Callback(hObject, eventdata, handles)
 % hObject    handle to stopgame (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+game_command('stop');
 
 
 % --- Executes on button press in recognition_overlay.
@@ -115,6 +137,7 @@ function resume_Callback(hObject, eventdata, handles)
 % hObject    handle to resume (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+game_command('resume');
 
 
 % --- Executes on button press in pause.
@@ -122,6 +145,7 @@ function pause_Callback(hObject, eventdata, handles)
 % hObject    handle to pause (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+game_command('pause');
 
 
 % --- Executes when user attempts to close figure1.
@@ -131,6 +155,6 @@ function figure1_CloseRequestFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: delete(hObject) closes the figure
-stop(timerfind);
+% stop(timerfind);
 delete(timerfind);
 delete(hObject);
