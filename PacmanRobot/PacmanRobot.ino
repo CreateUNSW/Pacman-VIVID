@@ -1,4 +1,4 @@
-//#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
 
 
 uint8_t red = 0;
@@ -7,7 +7,7 @@ uint8_t green = 0;
 
 void debug_colour();
 
-//#define USE_RADIO
+#define USE_RADIO
 //#define MATLAB
   
 #include <stdint.h>
@@ -16,6 +16,7 @@ void debug_colour();
 #include <string.h>
 
 #include <TimerOne.h>
+#include <TimerThree.h>
 #include <SPI.h>
 #include <AccelStepper.h>
 #include "RF24.h"
@@ -230,8 +231,8 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
 //#define PLAYER PACMAN
 //#define PLAYER_STRING "GHOST1"
 
-#define M_SPEED 300
-#define M_SLOW  150
+#define M_SPEED 225
+#define M_SLOW  175
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
 
@@ -539,17 +540,19 @@ void setup() {
   }
   delay(50);
   while (!digitalRead(45));
+  init_heading();
   
   #ifdef USE_RADIO
   // Init pacman waiting for input, will time-out after 10 seconds
   if (playerSelect == PACMAN) {
-    curr_command == MANUAL_OVERRIDE;
+    curr_command = MANUAL_OVERRIDE;
     manual_override_timer = millis();
+    globalHeading = '0';  
   }
   #endif
   //init_game();
-  init_heading();
   player_LEDs(); 
+  game.command = 0;
 }
 
 /**    MAIN FUNCTIONS    **/
@@ -559,6 +562,12 @@ void setup() {
 //       game is still updated normally, including if the person changes their input
 #define MANUAL_OVERRIDE_THRESHOLD 10000
 void loop() {
+  //Serial.println("start loop");
+  //Serial.print("curr_command: ");
+  //Serial.println(curr_command);
+  //Serial.print("globalHeading: ");
+  //Serial.println(globalHeading);
+  
   if (!digitalRead(45)) {
     delay(50);
     while (!digitalRead(45));
@@ -566,15 +575,24 @@ void loop() {
     setup();
   }
   #ifdef USE_RADIO
+    
+//    Serial.println(millis() - manual_override_timer);  
     update_game();
     // Whilst the last manual_override is in effect, don't update the current command
-    if (curr_command == MANUAL_OVERRIDE && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
+    if ((curr_command == MANUAL_OVERRIDE) && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
       // Once threshold reached, return to standard play (w/ AI)
       manual_override_timer = 0;
       curr_command = NOP;
       #ifdef DEBUG_RF
         Serial.println("RF: MANUAL_OVERRIDE PERIOD LAPSED : RETURN TO RANDOM PLAY");
       #endif
+      init_heading();
+        Serial.print("Found heading: '");
+        Serial.print(globalHeading);
+        Serial.println("'");
+        rgb[0] = 220;
+        rgb[1] = 220;
+        rgb[2] = 0;
     }
     // Make sure the game header is consistent with the checksum 
     if (game.header == checksum(&game)) {
@@ -676,6 +694,7 @@ void loop() {
           manual_override_timer = millis();
           curr_command = MANUAL_OVERRIDE;
           player_direction = game.override_dir;
+          break;
         default    : 
           #ifdef DEBUG_RF
             Serial.println("RF: INVALID COMMAND");
@@ -690,12 +709,16 @@ void loop() {
         // Currently does not do AI
         // Continue to the next case... 
       case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ 
-        line_follow();
+        if (curr_command == MANUAL_OVERRIDE) {
+           rgb[0] = 0;
+           rgb[1] = 200;
+           rgb[2] = 0;
+        }
         options = detect_intersection();
         if (options > 0) {
           decide_direction(options);
         }
-        
+        line_follow();
         /*if(moveFlag){
           moveFlag = 0;
           move_robot();
@@ -747,10 +770,9 @@ void print_game() {
 void update_game() {
   int i;
   game_state_t game_buf;
+  noInterrupts();
   if (radio.available()) {
-    noInterrupts();
     radio.read((char *)&game_buf,GAME_SIZE);
-    interrupts();
     if (game_buf.header == checksum(&game_buf) && game_buf.command == MANUAL_OVERRIDE) {
        game.command = MANUAL_OVERRIDE;
        game.override_dir = game_buf.override_dir;
@@ -766,6 +788,7 @@ void update_game() {
     // Not achievable with checksum()
     game.header = -1;
   }
+  interrupts();
 }
 
 uint8_t checksum(game_state_t *g) {
@@ -1084,7 +1107,11 @@ void move_robot() {
       m_topRight.enableOutputs();
       m_bottomLeft.enableOutputs();
       m_bottomRight.enableOutputs();
-    } else if(globalHeading=='0'){
+    }
+    currentHeading=globalHeading;
+        
+  }
+  if(globalHeading=='0'){
       updateSpeed(&m_topLeft,0);
       updateSpeed(&m_topRight,0);
       updateSpeed(&m_bottomLeft,0);
@@ -1094,8 +1121,6 @@ void move_robot() {
       m_bottomLeft.disableOutputs();
       m_bottomRight.disableOutputs();
     }
-    currentHeading=globalHeading;
-  }
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
@@ -1125,7 +1150,7 @@ void decide_direction(uint8_t options){
     case 'd': opposite_heading = 'u'; break;
     case 'l': opposite_heading = 'r'; break;
     case 'r': opposite_heading = 'l'; break;
-    default : opposite_heading = 0; break; 
+    default : opposite_heading = '0'; break; 
   }
   // Allow player to turn back on themselves
   if (curr_command != MANUAL_OVERRIDE) {
@@ -1137,17 +1162,18 @@ void decide_direction(uint8_t options){
   goal.y = 0;
   #ifdef USE_RADIO
   if (curr_command == MANUAL_OVERRIDE) {
-    if (player_direction & options) {
+    if ((player_direction & options) > 0) {
     // If the override direction is available, set that heading
       globalHeading = binary2heading(player_direction);
-    } else if (heading2binary(globalHeading) & options) {
+      player_direction  = 0;
+    } else if ((heading2binary(globalHeading) & options)>0) {
       // If the current direction is available, maintain
       globalHeading = globalHeading; // lol
     } else {
-      globalHeading = 0;
+      globalHeading = '0';
     }
     return;
-  } 
+  }
   // This else is to
   #endif
   if(goal.x==0&&goal.y==0){ //random movement mode
