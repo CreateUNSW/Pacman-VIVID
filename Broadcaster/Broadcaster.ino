@@ -6,9 +6,6 @@ Pacman Maze LED code
 Library used: Adafruit NeoPixel: https://github.com/adafruit/Adafruit_NeoPixel
 by Yunzhen Zhang
 
-Music Player code
-
-by Christopher Chun-Hung Ho
 
 NOTE: Using an Arduino Mega for this, as Uno does not have enough SRAM to support all the NeoPixels
 (Consider each neopixel takes 3 bytes of memory, we are using 600+ of them regardless whether they're on or off)
@@ -17,11 +14,6 @@ To do: investigate a bug when I include Serial.begin() in the code and the code 
 // Radio headers
 #include <SPI.h>
 #include "RF24.h"
-// Audio headers
-#include <SD.h>
-#include <arduino.h>
-#include <MusicPlayer.h>
-#include <SoftwareSerial.h>
 // LED headers
 #include <Adafruit_NeoPixel.h>
 #include <avr/power.h>
@@ -88,9 +80,6 @@ typedef struct _game_state {
 /*
  * Audio definitions
  */
-#define SIGNAL 11
-#define WAITER 9
-// Bits 4,5,6 set respectively
 #define MUS_MASK     B1110000
 #define MUS_BEGIN    B0010000
 #define MUS_VICTORY  B0100000
@@ -103,8 +92,8 @@ typedef struct _game_state {
 void init_radio(void);
 void init_game(void);
 void init_audio(void);
+void audio_play( int sound );
 void broadcast_game(void);
-void emptyPlaylist();
 
 /*
  * Global Variables
@@ -141,9 +130,6 @@ Adafruit_NeoPixel dots[9] =
   Adafruit_NeoPixel(TOTALLEDS, 10, NEO_GRB + NEO_KHZ800)
 };
 
-MusicPlayer singlePlayer;
-MusicPlayer wakaPlayer;
-playingstatetype playingState;
 
 void setup() {
   Serial.begin(57600);
@@ -172,6 +158,7 @@ void loop() {
     // Try and save time by only updating when a change has been made
     if (mapxy[game.pac.p.x][game.pac.p.y] == 1) {
       mapxy[game.pac.p.x][game.pac.p.y] = 0;
+      audio_play(2); // "eat dot" sound
       showMap();
     }
     
@@ -179,30 +166,10 @@ void loop() {
     if (game.command & MUSIC_COMMAND == MUSIC_COMMAND) {
         //Serial.println("got music");
         switch(game.override_dir & MUS_MASK){
-          case MUS_BEGIN:
-            emptyPlaylist();
-            singlePlayer.addToPlaylist("Begin.wav");
-            singlePlayer.opPlay();
-            //wait until song finishes
-            singlePlayer.opStop();
-            wakaPlayer.opPlay();
-            break;
-          case MUS_VICTORY: //play victory song
-            wakaPlayer.opStop();
-            emptyPlaylist();
-            singlePlayer.addToPlaylist("Inter.wav");
-            singlePlayer.opPlay();
-            //wait until song finishes
-            break;
-          case MUS_DEATH:
-            wakaPlayer.opStop();
-            emptyPlaylist();
-            singlePlayer.addToPlaylist("Death.wav");
-            singlePlayer.opPlay();
-            //wait until song finishes
-            break;
-          default:
-            break;
+          case MUS_BEGIN:   audio_play( 1 ); break;
+          case MUS_VICTORY: audio_play( 3 ); break;
+          case MUS_DEATH:   audio_play( 4 ); break;
+          default: break;
        }
        // Clear music information for clean broadcast to robots
        game.command &= ~MUSIC_COMMAND;
@@ -235,21 +202,17 @@ void init_radio() {
   //Serial.println("done");
 }
 void init_audio() {
-  //Set up output pins
-  pinMode(SIGNAL, OUTPUT);  //set up the output pin
-  
-  //Set up input pins
-  pinMode(WAITER, INPUT);
-  
-  singlePlayer.begin();  //initialises the single playing playlist.
-  wakaPlayer.begin();	 //Initialises the music Player
-  
-  singlePlayer.setPlayMode(PM_NORMAL_PLAY);
-  wakaPlayer.setPlayMode(PM_REPEAT_ONE);
-  
-  wakaPlayer.addToPlaylist("Chomp.wav"); 
+    Serial1.begin(115200);
+    // Login to raspi (this will be ignored if already logged in)
+    Serial1.print("tc\n");
+    delay(5);
+    // Play a test sound
+    audio_play(3);
 }
-
+void audio_play( int sound )
+{
+    Serial1.print(sound);
+}
 void print_game() {
   int i;
   for (i = 0; i < GAME_SIZE; i++) {
@@ -290,10 +253,4 @@ void showMap() {
       dots[i].show();
     }
   }  
-}
-/** Audio functions **/
-void emptyPlaylist() {
-  singlePlayer.deleteSong("Begin.wav");
-  singlePlayer.deleteSong("Death.wav");
-  singlePlayer.deleteSong("Inter.wav");
 }
