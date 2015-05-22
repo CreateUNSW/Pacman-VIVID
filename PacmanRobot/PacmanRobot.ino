@@ -335,7 +335,7 @@ void init_motors() {
   m_topRight.disableOutputs();
   m_bottomLeft.disableOutputs();
   m_bottomRight.disableOutputs();
-  Timer1.initialize(100);  // 100 us hopefully fast enough for variable speeds
+  Timer1.initialize(500);  // 100 us hopefully fast enough for variable speeds
   Timer1.attachInterrupt( move_robot );  // interrupt sets motion flag
 }
 
@@ -630,7 +630,7 @@ void loop() {
           #endif
           break;
         case STOP  : // To be sent when the game is over
-          if (game.override_dir & PAC_DEATH == PAC_DEATH) {
+          if ((game.override_dir & PAC_DEATH) == PAC_DEATH) {
             #ifdef DEBUG_RF
               Serial.println("RF: PACMAN DIED");
             #endif  
@@ -718,7 +718,9 @@ void loop() {
         if (options > 0) {
           decide_direction(options);
         }
-        line_follow();
+        if(globalHeading!='0'){
+          line_follow();
+        }
         /*if(moveFlag){
           moveFlag = 0;
           move_robot();
@@ -789,6 +791,7 @@ void update_game() {
     game.header = -1;
   }
   interrupts();
+  
 }
 
 uint8_t checksum(game_state_t *g) {
@@ -834,7 +837,7 @@ void init_heading(){
 uint8_t detect_intersection() {
   // returning true when robot has just reached an intersection
   // (to be completed)
-  if((millis()-lastIntersection)<2000){
+  if((millis()-lastIntersection)<2000&&globalHeading!='0'){
     return 0;
   }
   line_pos_t readTop = lineTop.get_line();
@@ -1135,10 +1138,12 @@ void updateSpeed(AccelStepper *thisMotor,int newSpeed){
 }
 
 void decide_direction(uint8_t options){  
-  //Serial.print("Global heading: ");
-  //Serial.println((char)globalHeading);
-  //Serial.print("Passed in line options: ");
-  //Serial.println(options,BIN);
+  Serial.print("Global heading: ");
+  Serial.println((char)globalHeading);
+  Serial.print("Passed in line options: ");
+  Serial.println(options,BIN);
+  Serial.print("Manual player request heading: ");
+  Serial.println(player_direction,BIN);
   heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
@@ -1163,13 +1168,17 @@ void decide_direction(uint8_t options){
   #ifdef USE_RADIO
   if (curr_command == MANUAL_OVERRIDE) {
     if ((player_direction & options) > 0) {
+      Serial.print("player's direction available :");
     // If the override direction is available, set that heading
       globalHeading = binary2heading(player_direction);
+      Serial.println((char)globalHeading);
       player_direction  = 0;
     } else if ((heading2binary(globalHeading) & options)>0) {
+      Serial.println("player's direction not available, but global is");
       // If the current direction is available, maintain
       globalHeading = globalHeading; // lol
     } else {
+      Serial.println("player nor global available");
       globalHeading = '0';
     }
     return;
@@ -1548,10 +1557,10 @@ void calc_new_square(int *x,int*y,heading_t h,int d){
 char binary2heading(uint8_t h) {
   char ret;
   switch(h){
-    case 0b0001 : ret = 'u'; break;
-    case 0b0010 : ret = 'r'; break;
-    case 0b0100 : ret = 'd'; break;
-    case 0b1000 : ret = 'l'; break;
+    case U : ret = 'u'; break;
+    case R : ret = 'r'; break;
+    case D : ret = 'd'; break;
+    case L : ret = 'l'; break;
     default  : ret = '0'; break;
   }
   return(ret);
