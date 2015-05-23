@@ -232,7 +232,7 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
 //#define PLAYER_STRING "GHOST1"
 
 #define M_SPEED 225
-#define M_SLOW  175
+#define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
 #define MAX_ALIGN_TIME 2000
 
@@ -925,6 +925,9 @@ uint8_t detect_intersection() {
 }
 
 bool align2intersection() {
+  if(globalHeading=='0'){
+    return true;
+  }
   int m_tL_speed = 0;
   int m_tR_speed = 0;
   int m_bL_speed = 0;
@@ -1180,6 +1183,7 @@ void decide_direction(uint8_t options){
     } else {
       Serial.println("player nor global available");
       globalHeading = '0';
+      player_direction = 0;
     }
     return;
   }
