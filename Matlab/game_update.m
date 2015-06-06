@@ -1,4 +1,4 @@
-function game_update = (pac_x, pac_y, pac_h, g1_x, g1_y, g1_h, g2_x, g2_y, g2_h, g3_x, g3_y, g3_h)
+function game_update = (game, pac_x, pac_y, pac_h, g1_x, g1_y, g1_h, g2_x, g2_y, g2_h, g3_x, g3_y, g3_h)
     game(1).pacman(1).position = struct('x', pac_x, 'y', pac_y);
     game(1).pacman(1).heading  = pac_h;
 
