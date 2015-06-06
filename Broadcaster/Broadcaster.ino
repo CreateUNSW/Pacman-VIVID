@@ -117,6 +117,88 @@ byte mapxy[9][9] =
   {1, 1, 1, 1, 1, 1, 1, 1, 1}
 };
 
+byte startup[6][9][9] = {
+
+{
+  /***         C          ***/
+  {0, 1, 1, 1, 1, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 1, 1, 0, 0, 0}
+},
+
+{
+  /***         R          ***/
+  {0, 1, 1, 1, 1, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 1, 1, 1, 0, 0, 0, 0},
+  {0, 1, 1, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 1, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 1, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0}
+},
+
+{
+  /***         E          ***/
+  {0, 1, 1, 1, 1, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 1, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 1, 1, 0, 0, 0}
+},
+
+{
+  /***         A          ***/
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 1, 1, 1, 0, 0, 0, 0},
+  {0, 0, 1, 0, 1, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 1, 1, 1, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 1, 0, 0, 0}
+},
+
+{
+  /***         T          ***/
+  {0, 1, 1, 1, 1, 1, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0, 0, 0, 0}
+},
+{
+  /***         E          ***/
+  {0, 1, 1, 1, 1, 1, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 1, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0, 0, 0, 0},
+  {0, 1, 1, 1, 1, 1, 0, 0, 0}
+}
+  
+  
+};
+
 Adafruit_NeoPixel dots[9] =
 {
   Adafruit_NeoPixel(TOTALLEDS,  2, NEO_GRB + NEO_KHZ800),
@@ -139,6 +221,8 @@ void setup() {
      dots[i].show(); 
   }
   //initialise map
+  blankMap();
+  create_leds();
   showMap();
   init_radio();
   init_game();
@@ -163,7 +247,7 @@ void loop() {
     }
     
     // Special matlab command for an audio change
-    if (game.command & MUSIC_COMMAND == MUSIC_COMMAND) {
+    if ((game.command & MUSIC_COMMAND)== MUSIC_COMMAND) {
         //Serial.println("got music");
         switch(game.override_dir & MUS_MASK){
           case MUS_BEGIN:   audio_play( 1 ); break;
@@ -253,4 +337,65 @@ void showMap() {
       dots[i].show();
     }
   }  
+}
+
+void blankMap() {
+  for (int i = 0; i < TOTALSTRIPS; i++) {
+    for (int j = 0; j < TOTALLEDS; j+=SPACING) {
+        dots[i].setPixelColor(j, dots[i].Color(0,0,0));
+        dots[i].show();
+    }
+  }  
+}
+void create_leds() {
+  
+  byte currentState[9][9] = {
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0},
+      {0, 0, 0, 0, 0, 0, 0, 0, 0}
+  };
+  int t;
+  for (t = 0; t < 54; t++) {
+    byte column[9];
+    // Shifts in the next column of the total character grid
+    shiftMapLeft(currentState, getColumn(column, startup, t));
+    for (int i = 0; i < TOTALSTRIPS; i++) {
+      for (int j = 0; j < TOTALLEDS; j+=SPACING) {
+        if (currentState[i][j] == 1) {
+          dots[i].setPixelColor(j, dots[i].Color(30,10,180));
+        } else {
+           dots[i].setPixelColor(j, dots[i].Color(0,0,0));
+        }
+      }
+    }
+    dots[i].show();
+    delay(100);
+  }
+}
+
+void shiftMapLeft(byte grid[9][9], byte SIL[9]) {
+  // SIL is a column vector for shifting in
+  for (int i = 0; i  < 9; i++) {
+     for (int j = 0; j < 9; j++) {
+        if (j+1 < 9) {
+          grid[i][j] = grid[i][j+1];
+        } else {
+          grid[i][j] = SIL[i];
+        }
+     } 
+  }
+}
+// Returning the column just to I can embed the function
+byte * getColumn(byte column[9], byte character_grid[6][9][9], int t) {
+   int i;
+   for (i = 0; i < 9; i++) {
+     column[i] = character_grid[t/9][i][t%9];
+   }
+   return column;
 }
