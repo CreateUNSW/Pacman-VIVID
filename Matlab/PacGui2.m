@@ -65,7 +65,7 @@ dotPoints = zeros(81,2);
 handles.output = hObject;
 specialObject = hObject;
 
-handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
+handles.axes2 = image(zeros(288,352,3),'Parent',handles.axes1);
 % preview(cam,handles.axes2);
 camera_start('calibration',handles.axes2);
 hold on;

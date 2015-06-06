@@ -15,6 +15,7 @@ function camera_setup()
     % camList = webcamlist
     delete(cam);
     cam = webcam(2) % can set exposure and other properties from this handle
+    cam.Resolution = '352x288';
 %     cam.ExposureMode = 'manual';
 %     cam.WhiteBalanceMode = 'manual';
 

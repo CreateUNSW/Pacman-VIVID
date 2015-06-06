@@ -11,42 +11,24 @@ function camera_start(mode,axes)
         plotOverlay.inky = plot(axes.Parent,NaN,NaN,'bo','MarkerSize',48,'LineWidth',2);
         pacVid = timer('Period', 0.25, 'ExecutionMode','FixedSpacing');
         pacVid.TimerFcn = {@PacCam,axes};
+        pause(1);
 %         pacVid.StopFcn = {@StopPacVid};
         start(pacVid);
     end
     
 function PacCam(~,~,axes)
 global cam;
-global intData;
+%global intData;
 img = snapshot(cam);
+
 set(axes,'CData',img);
-if intData==1
-    robots = detectRobots(img);
-end
+% if intData==1
+robots = [];
+    [robots.x,robots.y] = detectRobots(img);
+% end
     
-function robots = detectRobots(img)
-newHSV = rgb2hsv(img);
-[mask,segImg] = testRED(newHSV);
-[x,y] = getCentre(mask);
-robots.x = x;
-robots.y = y;
-% need to add inky and blinky
 
 
-function [x,y] = getCentre(mask)
-global boundary;
-mask = bwareaopen(mask,100);
-mask = bwmorph(mask,'erode',2);
-props = regionprops(mask,'Centroid');
-centroid = props.Centroid;
-x = 1;
-y = 1;
-while centroid(1)>boundary.xx(x)&&x<9
-   x = x+1;
-end
-while centroid(2)>boundary.yy(y)&&y<9
-    y = y+1;
-end
     
     
         

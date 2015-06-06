@@ -56,7 +56,7 @@ function PacGui_OpeningFcn(hObject, eventdata, handles, varargin)
 % Choose default command line output for PacGui
 handles.output = hObject;
 
-handles.axes2 = image(zeros(360,480,3),'Parent',handles.axes1);
+handles.axes2 = image(zeros(288,352,3),'Parent',handles.axes1);
 hold on;
 % preview(cam,handles.axes2);
 camera_start('game',handles.axes2);
