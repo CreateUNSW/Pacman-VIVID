@@ -25,7 +25,7 @@ img = snapshot(cam);
 set(axes,'CData',img);
 robots = [];
 [robots.x,robots.y,robots.centre] = detectRobots(img);
-robots.centre
+[robots.x;robots.y]
 set(plotOverlay.pacman,'xdata',robots.centre(1,1),'ydata',robots.centre(1,2));
 set(plotOverlay.blinky,'xdata',robots.centre(2,1),'ydata',robots.centre(2,2));
 set(plotOverlay.pinky,'xdata',robots.centre(3,1),'ydata',robots.centre(3,2));
