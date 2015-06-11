@@ -14,15 +14,15 @@ function [BW,maskedRGBImage] = testRED(RGB)
 % I = rgb2hsv(RGB);
 I = RGB;
 % Define thresholds for channel 1 based on histogram settings
-channel1Min = 0.922;
-channel1Max = 0.104;
+channel1Min = 0.908;
+channel1Max = 0.025;
 
 % Define thresholds for channel 2 based on histogram settings
-channel2Min = 0.625;
+channel2Min = 0.844;
 channel2Max = 1.000;
 
 % Define thresholds for channel 3 based on histogram settings
-channel3Min = 0.731;
+channel3Min = 0.815;
 channel3Max = 1.000;
 
 % Create mask based on chosen histogram thresholds
