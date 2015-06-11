@@ -29,6 +29,8 @@ D = 2;
 L = 1;
 % Note: Use bitor to compose two commands/directives. e.g. bitor(val1,val2)
 %% Create a game state global variable
+global game;
+game = [];
 game(1).header       = 1;
 game(1).command      = bitor(START, MUSIC_COMMAND);
 game(1).override_dir = MUS_BEGIN;
@@ -37,14 +39,14 @@ game(1).g            = struct('position', {}, 'heading', {});
 game(2).g            = struct('position', {}, 'heading', {});
 game(3).g            = struct('position', {}, 'heading', {});
 
-game(1).pacman(1).position = struct('x', 1, 'y', 2);
-game(1).pacman(1).heading  = U;
+game(1).pacman(1).position = struct('x', 5, 'y', 7);
+game(1).pacman(1).heading  = R;
 
-game(1).g(1).position = struct('x', 3, 'y', 4);
-game(1).g(1).heading  = D;
+game(1).g(1).position = struct('x', 4, 'y', 5);
+game(1).g(1).heading  = R;
 
-game(2).g(1).position = struct('x', 5, 'y', 6);
-game(2).g(1).heading  = L;
+game(2).g(1).position = struct('x', 5, 'y', 5);
+game(2).g(1).heading  = U;
 
-game(3).g(1).position = struct('x', 7, 'y', 8);
-game(3).g(1).heading  = R;
+game(3).g(1).position = struct('x', 6, 'y', 5);
+game(3).g(1).heading  = L;

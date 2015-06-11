@@ -18,6 +18,3 @@ function camera_setup()
     cam.Resolution = '352x288';
 %     cam.ExposureMode = 'manual';
 %     cam.WhiteBalanceMode = 'manual';
-
-
-%     global cam

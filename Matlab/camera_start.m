@@ -9,7 +9,7 @@ function camera_start(mode,axes)
         plotOverlay.blinky = plot(axes.Parent,NaN,NaN,'ro','MarkerSize',48,'LineWidth',2);
         plotOverlay.pinky = plot(axes.Parent,NaN,NaN,'mo','MarkerSize',48,'LineWidth',2);
         plotOverlay.inky = plot(axes.Parent,NaN,NaN,'bo','MarkerSize',48,'LineWidth',2);
-        pacVid = timer('Period', 0.25, 'ExecutionMode','FixedSpacing');
+        pacVid = timer('Period', 0.1, 'ExecutionMode','FixedSpacing');
         pacVid.TimerFcn = {@PacCam,axes};
         pause(1);
 %         pacVid.StopFcn = {@StopPacVid};
@@ -18,20 +18,20 @@ function camera_start(mode,axes)
     
 function PacCam(~,~,axes)
 global cam;
+global plotOverlay;
 %global intData;
 img = snapshot(cam);
 
 set(axes,'CData',img);
-% if intData==1
 robots = [];
-    [robots.x,robots.y] = detectRobots(img);
-% end
-    
+[robots.x,robots.y,robots.centre] = detectRobots(img);
+robots.centre
+set(plotOverlay.pacman,'xdata',robots.centre(1,1),'ydata',robots.centre(1,2));
+set(plotOverlay.blinky,'xdata',robots.centre(2,1),'ydata',robots.centre(2,2));
+set(plotOverlay.pinky,'xdata',robots.centre(3,1),'ydata',robots.centre(3,2));
+set(plotOverlay.inky,'xdata',robots.centre(4,1),'ydata',robots.centre(4,2));
+set(plotOverlay.h1,'xdata',robots.centre(:,1),'ydata',robots.centre(:,2));
 
 
-    
-    
-        
-    
     
 % function StopPacVid()
