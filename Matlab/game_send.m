@@ -1,8 +1,9 @@
-function [] = game_send(s,curGame)
+function [] = game_send(curGame)
+    global s;
     %% Set up the serial communication to arduino
     % NOTE: This will need to be changed to the write port on your PC
     % The next 4 lines need to be run outside of this script for some reason.
-    
+    A = [];
     A(1) = curGame(1).header;
     A(2) = curGame(1).command;
     A(3) = curGame(1).override_dir;

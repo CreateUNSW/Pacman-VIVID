@@ -8,6 +8,7 @@ pause(1);
 if strcmp(mode,'calibration')
     PacGui2();
 elseif strcmp(mode,'game')
+    game_init();
     PacGui();
     try
         s = load('intConfig.mat');
@@ -17,4 +18,5 @@ elseif strcmp(mode,'game')
     catch MExc
         disp('No stored map config file');
     end
+    
 end

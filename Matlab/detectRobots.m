@@ -15,7 +15,7 @@ global boundary;
 x = 0;
 y = 0;
 centroid = [NaN,NaN];
-mask = bwareaopen(mask,15);
+mask = bwareaopen(mask,20);
 props = regionprops(mask,'Centroid');
 if numel(props)~=0
     centroid = props.Centroid;

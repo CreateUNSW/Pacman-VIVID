@@ -1,3 +1,6 @@
+global s;
+% Create a game state global variable
+global game;
 s = serial('COM10', 'BaudRate', 57600, 'Terminator', '');
 fopen(s);
 % To clean up ALL open com ports, run this line
@@ -23,13 +26,16 @@ MANUAL_OVERRIDE = 64;
 MUS_DEATH   = 64;
 MUS_VICTORY = 32;
 MUS_BEGIN   = 16;
-U = 8;
-R = 4;
-D = 2;
-L = 1;
+% U = 8;
+% R = 4;
+% D = 2;
+% L = 1;
+U = 'u';
+R = 'r';
+D = 'd';
+L = 'l';
 % Note: Use bitor to compose two commands/directives. e.g. bitor(val1,val2)
-%% Create a game state global variable
-global game;
+
 game = [];
 game(1).header       = 1;
 game(1).command      = bitor(START, MUSIC_COMMAND);
@@ -39,7 +45,7 @@ game(1).g            = struct('position', {}, 'heading', {});
 game(2).g            = struct('position', {}, 'heading', {});
 game(3).g            = struct('position', {}, 'heading', {});
 
-game(1).pacman(1).position = struct('x', 5, 'y', 7);
+game(1).pacman(1).position = struct('x', 0, 'y', 0);
 game(1).pacman(1).heading  = R;
 
 game(1).g(1).position = struct('x', 4, 'y', 5);

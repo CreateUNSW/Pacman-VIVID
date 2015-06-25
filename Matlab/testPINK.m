@@ -15,15 +15,15 @@ function [BW,maskedRGBImage] = testPINK(RGB)
 I=RGB;
 
 % Define thresholds for channel 1 based on histogram settings
-channel1Min = 0.846;
-channel1Max = 0.960;
+channel1Min = 0.789;
+channel1Max = 0.955;
 
 % Define thresholds for channel 2 based on histogram settings
-channel2Min = 0.507;
+channel2Min = 0.586;
 channel2Max = 1.000;
 
 % Define thresholds for channel 3 based on histogram settings
-channel3Min = 0.781;
+channel3Min = 0.462;
 channel3Max = 1.000;
 
 % Create mask based on chosen histogram thresholds

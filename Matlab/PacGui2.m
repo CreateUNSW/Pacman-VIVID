@@ -350,8 +350,10 @@ camConfig.Exposure = cam.Exposure;
 camConfig.WhiteBalanceMode = cam.WhiteBalanceMode;
 camConfig.Contrast = cam.Contrast;
 save('camConfig','camConfig');
+disp('Saved camera configuration');
 if dotPointEntry==81
     save('intConfig','dotPoints','boundary');
+    disp('Saved intersection configuration');
 end
 
 
