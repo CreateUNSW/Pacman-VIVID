@@ -1,12 +1,12 @@
-global s;
+global mySerial;
 % Create a game state global variable
 global game;
-s = serial('COM10', 'BaudRate', 57600, 'Terminator', '');
-fopen(s);
+mySerial = serial('COM23', 'BaudRate', 57600, 'Terminator', '');
+fopen(mySerial);
 % To clean up ALL open com ports, run this line
 % fclose(instrfind);
 
-if (strcmp (get (s, 'status'), 'closed'))
+if (strcmp (get (mySerial, 'status'), 'closed'))
    error('Please open the file to communicate with the arduino...'); 
 end
 

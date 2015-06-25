@@ -1,5 +1,5 @@
 function [] = game_send(curGame)
-    global s;
+    global mySerial;
     %% Set up the serial communication to arduino
     % NOTE: This will need to be changed to the write port on your PC
     % The next 4 lines need to be run outside of this script for some reason.
@@ -21,5 +21,5 @@ function [] = game_send(curGame)
     A(11) = curGame(3).g.heading;
     
     % Write serial to the arduino
-    fwrite(s, A);
+    fwrite(mySerial, A);
 end

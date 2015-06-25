@@ -19,6 +19,7 @@ function camera_start(mode,axes)
 function PacCam(~,~,axes)
 global cam;
 global plotOverlay;
+global game;
 %global intData;
 img = snapshot(cam);
 
@@ -44,7 +45,7 @@ g3.x = robots.x(1);
 g3.y = robots.y(1);
 g3.h = robots.h(1);
 game_update(pac,g1,g2,g3);
-game_send(
+game_send(game);
 set(plotOverlay.pacman,'xdata',robots.centre(1,1),'ydata',robots.centre(1,2));
 set(plotOverlay.blinky,'xdata',robots.centre(2,1),'ydata',robots.centre(2,2));
 set(plotOverlay.pinky,'xdata',robots.centre(3,1),'ydata',robots.centre(3,2));
