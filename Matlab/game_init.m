@@ -38,8 +38,8 @@ L = 'l';
 
 game = [];
 game(1).header       = 1;
-game(1).command      = bitor(START, MUSIC_COMMAND);
-game(1).override_dir = MUS_BEGIN;
+game(1).command      = NOP;
+game(1).override_dir = 0;
 game(1).pacman       = struct('position', {}, 'heading', {});
 game(1).g            = struct('position', {}, 'heading', {});
 game(2).g            = struct('position', {}, 'heading', {});

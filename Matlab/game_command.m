@@ -27,7 +27,8 @@ if strcmp(command,'start')
     game(1).command = bitor(START, MUSIC_COMMAND);
     game(1).override_dir = MUS_BEGIN;
 elseif strcmp(command,'stop')
-    game(1).command = STOP;
+    game(1).command = bitor(STOP, MUSIC_COMMAND);
+    game(1).ovverride_dir = MUS_DEATH;
 elseif strcmp(command,'pause')
     game(1).command = PAUSE;
 elseif strcmp(command,'resume')

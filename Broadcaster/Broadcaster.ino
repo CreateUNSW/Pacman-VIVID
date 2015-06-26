@@ -240,6 +240,9 @@ void loop() {
     }
     // TURN OFF LIGHT WHERE PACMAN IS
     // Try and save time by only updating when a change has been made
+    Serial.print(game.pac.p.x);
+    Serial.print(" ");
+    Serial.print(game.pac.p.y);
     if (mapxy[game.pac.p.x][game.pac.p.y] == 1) {
       mapxy[game.pac.p.x][game.pac.p.y] = 0;
       audio_play(2); // "eat dot" sound
@@ -330,14 +333,17 @@ void set_checksum(void) {
 //shows the initital 9 x 9 grid
 void showMap() {
   for (int i = 0; i < TOTALSTRIPS; i++) {
-    for (int j = 0; j < TOTALLEDS; j++) {
-      if (j % SPACING == 0) {  
+    for (int j = 0; j < TOTALLEDS; j+= SPACING) {
+      if (mapxy[j/SPACING][i] == 1) {  
         dots[i].setPixelColor(j, dots[i].Color(255,188,150));
+      } else {
+        dots[i].setPixelColor(j, dots[i].Color(0,0,0));
       }
-      dots[i].show();
     }
+    dots[i].show();
   }  
 }
+
 
 void blankMap() {
   for (int i = 0; i < TOTALSTRIPS; i++) {
