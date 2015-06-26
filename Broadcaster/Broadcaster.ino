@@ -247,8 +247,7 @@ void loop() {
       if (mapxy[game.pac.p.x-1][game.pac.p.y-1] == 1) {
         mapxy[game.pac.p.x-1][game.pac.p.y-1] = 0;
         showMap();
-        delay(100);
-        audio_play(2); // "eat dot" sound
+        audio_play( 2 ); // "eat dot" sound
       }
     }
     

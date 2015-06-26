@@ -41,4 +41,4 @@ elseif strcmp(command, 'victory')
     game(1).command = MUSIC_COMMAND;
     game(1).override_dir = MUS_VICTORY;
 end
-game_send(game);
+% game_send(game);
