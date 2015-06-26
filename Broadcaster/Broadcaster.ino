@@ -224,7 +224,7 @@ void setup() {
   blankMap();
   create_leds();
   showMap();
-  init_radio();
+  //init_radio();
   init_game();
   init_audio();
 }
@@ -243,10 +243,13 @@ void loop() {
     Serial.print(game.pac.p.x);
     Serial.print(" ");
     Serial.print(game.pac.p.y);
-    if (mapxy[game.pac.p.x][game.pac.p.y] == 1) {
-      mapxy[game.pac.p.x][game.pac.p.y] = 0;
-      audio_play(2); // "eat dot" sound
-      showMap();
+    if(game.pac.p.x!=0&&game.pac.p.y!=0){
+      if (mapxy[game.pac.p.x-1][game.pac.p.y-1] == 1) {
+        mapxy[game.pac.p.x-1][game.pac.p.y-1] = 0;
+        showMap();
+        delay(100);
+        audio_play(2); // "eat dot" sound
+      }
     }
     
     // Special matlab command for an audio change
@@ -265,8 +268,8 @@ void loop() {
     
     // Need to broadcast game whilst music is being played
     delay(1);
-    for (i = 0; i < NUM_RETRANS; i++) 
-      broadcast_game();
+    //for (i = 0; i < NUM_RETRANS; i++) 
+    //  broadcast_game();
   }
 
 }

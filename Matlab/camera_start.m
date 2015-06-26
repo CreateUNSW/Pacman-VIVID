@@ -26,7 +26,8 @@ img = snapshot(cam);
 set(axes,'CData',img);
 robots = [];
 [robots.x,robots.y,robots.centre] = detectRobots(img);
-[robots.x;robots.y]
+% following line displays coordinates
+% [robots.x;robots.y]
 robots.h = ['0','0','0','0'];
 pac = [];
 g1 = [];
@@ -45,7 +46,7 @@ g3.x = robots.x(4);
 g3.y = robots.y(4);
 g3.h = robots.h(4);
 game_update(pac,g1,g2,g3);
-game_send(game);
+% game_send(game);
 game(1).command      = 0;
 game(1).override_dir = 0;
 set(plotOverlay.pacman,'xdata',robots.centre(1,1),'ydata',robots.centre(1,2));

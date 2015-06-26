@@ -28,9 +28,10 @@ if strcmp(command,'start')
     game(1).override_dir = MUS_BEGIN;
 elseif strcmp(command,'stop')
     game(1).command = bitor(STOP, MUSIC_COMMAND);
-    game(1).ovverride_dir = MUS_DEATH;
+    game(1).override_dir = MUS_DEATH;
 elseif strcmp(command,'pause')
-    game(1).command = PAUSE;
+    game(1).command = bitor(PAUSE,MUSIC_COMMAND);
+    game(1).override_dir = MUS_VICTORY;
 elseif strcmp(command,'resume')
     game(1).command = RESUME;
 elseif strcmp(command, 'death')
@@ -40,3 +41,4 @@ elseif strcmp(command, 'victory')
     game(1).command = MUSIC_COMMAND;
     game(1).override_dir = MUS_VICTORY;
 end
+game_send(game);

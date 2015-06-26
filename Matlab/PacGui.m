@@ -158,3 +158,4 @@ function figure1_CloseRequestFcn(hObject, eventdata, handles)
 % stop(timerfind);
 delete(timerfind);
 delete(hObject);
+fclose(instrfind);

@@ -9,6 +9,7 @@ function [] = game_send(curGame)
     A(3) = curGame(1).override_dir;
     % Because x and y are each 4 bits of the same byte, shift x up, add y
     A(4) = curGame(1).pacman.position.x * 16 + curGame(1).pacman.position.y;
+    disp(A(4));
     A(5) = curGame(1).pacman.heading;
 
     A(6) = curGame(1).g.position.x * 16 + curGame(1).g.position.y;
