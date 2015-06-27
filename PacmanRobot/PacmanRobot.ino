@@ -16,7 +16,7 @@ void debug_colour();
 #include <string.h>
 
 #include <TimerOne.h>
-#include <TimerThree.h>
+//#include <TimerThree.h>
 #include <SPI.h>
 #include <AccelStepper.h>
 #include "RF24.h"
