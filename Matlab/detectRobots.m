@@ -21,10 +21,11 @@ if numel(props)~=0
     centroid = props.Centroid;
     x = 1;
     y = 1;
-    while x<9&&centroid(1)>boundary.xx(x)
+    while x<9&&centroid(1)>boundary.xx(x)-(centroid(2)-boundary.midPointY)*boundary.xxg(x)
        x = x+1;
     end
     while y<9&&centroid(2)>boundary.yy(y)
         y = y+1;
     end
+%     [boundary.xx(i)+boundary.midPointY*boundary.xxg(i),boundary.xx(i)-(360-boundary.midPointY)*boundary.xxg(i)]/scale(1)
 end

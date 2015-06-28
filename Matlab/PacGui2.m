@@ -208,12 +208,15 @@ if dotPointEntry==81
     yy = mean(T(:,:,2));
     xx = mean(T(:,:,1)');
     axes = plotHandle.h2.Parent;
+    boundary.midPointY = yy(5);
     for i=1:8
         boundary.xx(i) = (xx(i)+xx(i+1))/2*scale(1);
+        boundary.xxg(i) = ((T(i,1,1)-T(i,9,1))/range(T(i,:,2))+(T(i+1,1,1)-T(i+1,9,1))/range(T(i+1,:,2)))/2;
+        
         boundary.yy(i) = (yy(i)+yy(i+1))/2*scale(2);
     
 %         set(plotHandle.h2,'xdata',[xx(i),xx(i)],'ydata',[0,360]);
-      set(plotHandle.h2(2*i-1),'xdata',[boundary.xx(i),boundary.xx(i)]/scale(1),'ydata',[0,360]);
+      set(plotHandle.h2(2*i-1),'xdata',[boundary.xx(i)+boundary.midPointY*boundary.xxg(i),boundary.xx(i)-(360-boundary.midPointY)*boundary.xxg(i)]/scale(1),'ydata',[0,360]);
       set(plotHandle.h2(2*i),'xdata',[0,480],'ydata',[boundary.yy(i),boundary.yy(i)]/scale(2));
     end;
 %     linex = [xx,xx;
