@@ -383,7 +383,7 @@ void create_leds() {
       }
       dots[i].show();
     }
-    delay(100);
+    delay(200);
   }
 }
 
