@@ -375,14 +375,14 @@ void create_leds() {
     shiftMapLeft(currentState, getColumn(column, startup, t));
     for (int i = 0; i < TOTALSTRIPS; i++) {
       for (int j = 0; j < TOTALLEDS; j+=SPACING) {
-        if (currentState[i][j] == 1) {
+        if (currentState[j/SPACING][i] == 1) {
           dots[i].setPixelColor(j, dots[i].Color(30,10,180));
         } else {
            dots[i].setPixelColor(j, dots[i].Color(0,0,0));
         }
       }
+      dots[i].show();
     }
-    dots[i].show();
     delay(100);
   }
 }
