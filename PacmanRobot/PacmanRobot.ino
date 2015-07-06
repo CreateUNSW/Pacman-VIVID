@@ -250,6 +250,7 @@ unsigned long aiTime = 0;
 unsigned long loopTime = 0;
 unsigned long lastIntersection = 0;
 bool animationToggle = 0;
+bool readingRadio = 0;
 
 game_state_t game;
 // Extra space to prevent corruption of data, due to the required 32 byte payload.
@@ -265,6 +266,7 @@ uint8_t __space[21];
 // Updated by MANUAL_OVERRIDE
 uint8_t player_direction = 0;
 unsigned long manual_override_timer = 0;
+unsigned long lastRadioUpdateTime = 0;
 
 /*
  * Functions to be used by robots and hub
@@ -770,9 +772,13 @@ void print_game() {
 
 /**    RADIO NETWORK FUNCTIONS    **/
 void update_game() {
+  if(millis()-lastRadioUpdateTime<100){
+    return;
+  }
   int i;
   game_state_t game_buf;
-  noInterrupts();
+  //noInterrupts();
+  readingRadio = 1;
   if (radio.available()) {
     radio.read((char *)&game_buf,GAME_SIZE);
     if (game_buf.header == checksum(&game_buf) && game_buf.command == MANUAL_OVERRIDE) {
@@ -790,7 +796,9 @@ void update_game() {
     // Not achievable with checksum()
     game.header = -1;
   }
-  interrupts();
+  readingRadio = 0;
+  lastRadioUpdateTime = millis();
+  //interrupts();
   
 }
 
@@ -1107,6 +1115,9 @@ void move_flag(){
 }
 
 void move_robot() {
+  if(readingRadio){
+    return;
+  }
   if(currentHeading!=globalHeading){
     if(currentHeading=='0'){
       m_topLeft.enableOutputs();
@@ -1118,15 +1129,15 @@ void move_robot() {
         
   }
   if(globalHeading=='0'){
-      updateSpeed(&m_topLeft,0);
-      updateSpeed(&m_topRight,0);
-      updateSpeed(&m_bottomLeft,0);
-      updateSpeed(&m_bottomRight,0);
-      m_topLeft.disableOutputs();
-      m_topRight.disableOutputs();
-      m_bottomLeft.disableOutputs();
-      m_bottomRight.disableOutputs();
-    }
+    updateSpeed(&m_topLeft,0);
+    updateSpeed(&m_topRight,0);
+    updateSpeed(&m_bottomLeft,0);
+    updateSpeed(&m_bottomRight,0);
+    m_topLeft.disableOutputs();
+    m_topRight.disableOutputs();
+    m_bottomLeft.disableOutputs();
+    m_bottomRight.disableOutputs();
+  }
   m_topLeft.runSpeed();
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
