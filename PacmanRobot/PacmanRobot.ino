@@ -1,4 +1,4 @@
-#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+//#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
 
 
 uint8_t red = 0;
@@ -311,7 +311,10 @@ void enter_robot_location(robot_t * entry);
 void calc_new_square(int *x,int*y,heading_t h,int d);
 
 /**    SET UP   **/
-
+bool radio_flag = 0;
+void check_radio() {
+   radio_flag = 1; 
+}
 void init_radio() {
   radio.begin();
   radio.openReadingPipe(0,pipe);
@@ -321,6 +324,7 @@ void init_radio() {
   radio.setAutoAck(false);
   radio.startListening();
   radio.setPayloadSize(32);
+  attachInterrupt(3, check_radio, FALLING);
 }
 
 void init_motors() {
@@ -569,19 +573,22 @@ void loop() {
   //Serial.println(curr_command);
   //Serial.print("globalHeading: ");
   //Serial.println(globalHeading);
-  
-  if (!digitalRead(45)) {
-    delay(50);
-    while (!digitalRead(45));
-    delay(50);
-    setup();
-  }
+  delay(10);
+//  if (!digitalRead(45)) {
+//    delay(50);
+//    while (!digitalRead(45));
+//    delay(50);
+//    setup();
+//  }
   #ifdef USE_RADIO
     
 //    Serial.println(millis() - manual_override_timer);  
-    update_game();
+    if (radio_flag) {
+        update_game();
+    }
     // Whilst the last manual_override is in effect, don't update the current command
-    if ((curr_command == MANUAL_OVERRIDE) && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
+    if (false) {
+//    if ((curr_command == MANUAL_OVERRIDE) && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
       // Once threshold reached, return to standard play (w/ AI)
       manual_override_timer = 0;
       curr_command = NOP;
@@ -704,6 +711,8 @@ void loop() {
           break; //Do nothing 
       }
     }
+    // Clear the game header after use
+    game.header = -1;
     // The meat of controlling the motors + line sensing will be done here
     uint8_t options = 0;
     switch(curr_command) {
@@ -712,8 +721,8 @@ void loop() {
         // Continue to the next case... 
       case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ 
         if (curr_command == MANUAL_OVERRIDE) {
-           rgb[0] = 0;
-           rgb[1] = 200;
+           rgb[0] = 220;
+           rgb[1] = 220;
            rgb[2] = 0;
         }
         options = detect_intersection();
@@ -732,6 +741,7 @@ void loop() {
       case STOP            : /*If button pressed, change player*/ break;
       default              : /*PAUSE, STOP, START*/ break;
     }
+    
   #else  
     // Non-map based motor control goes here
     //red = 0; green = 0; blue = 0;
@@ -772,13 +782,16 @@ void print_game() {
 
 /**    RADIO NETWORK FUNCTIONS    **/
 void update_game() {
-  if(millis()-lastRadioUpdateTime<100){
-    return;
-  }
+//  if(millis()-lastRadioUpdateTime<100){
+//    return;
+//  }
   int i;
   game_state_t game_buf;
   //noInterrupts();
   readingRadio = 1;
+  #ifdef DEBUG_RF
+    Serial.println("Updating Game...");
+  #endif
   if (radio.available()) {
     radio.read((char *)&game_buf,GAME_SIZE);
     if (game_buf.header == checksum(&game_buf) && game_buf.command == MANUAL_OVERRIDE) {
@@ -797,8 +810,9 @@ void update_game() {
     game.header = -1;
   }
   readingRadio = 0;
-  lastRadioUpdateTime = millis();
+//  lastRadioUpdateTime = millis();
   //interrupts();
+  radio_flag = 0;
   
 }
 
