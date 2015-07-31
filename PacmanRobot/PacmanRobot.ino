@@ -1,4 +1,5 @@
 //#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+#define PRINT_DECISION // Debug messages used during decide direction
 
 
 uint8_t red = 0;
@@ -234,7 +235,7 @@ typedef enum {PACMAN=0, GHOST1, GHOST2, GHOST3} playerType_t;
 #define M_SPEED 225
 #define M_SLOW  150
 #define STEPPER_MAX_SPEED 1000
-#define MAX_ALIGN_TIME 2000
+#define MAX_ALIGN_TIME 1000
 
 /*
  * Global Variables
@@ -313,7 +314,10 @@ void calc_new_square(int *x,int*y,heading_t h,int d);
 /**    SET UP   **/
 bool radio_flag = 0;
 void check_radio() {
+   Serial.println("check_radio...");
    radio_flag = 1; 
+   Serial.println("check_radio - done");
+
 }
 void init_radio() {
   radio.begin();
@@ -484,7 +488,7 @@ void init_game() {
   // To be replaced with LCD display and button toggling!
   switch(playerSelect){
     case PACMAN : thisRobot = &game.pac; break;    
-    default  : thisRobot = &game.g[playerSelect-1]; break;
+    default     : thisRobot = &game.g[playerSelect-1]; break;
   }
 }
 
@@ -587,8 +591,8 @@ void loop() {
         update_game();
     }
     // Whilst the last manual_override is in effect, don't update the current command
-    if (false) {
-//    if ((curr_command == MANUAL_OVERRIDE) && (millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD) {
+//    if (false) {
+    if ((curr_command == MANUAL_OVERRIDE) && ((millis() - manual_override_timer) >= MANUAL_OVERRIDE_THRESHOLD)) {
       // Once threshold reached, return to standard play (w/ AI)
       manual_override_timer = 0;
       curr_command = NOP;
@@ -721,13 +725,17 @@ void loop() {
         // Continue to the next case... 
       case MANUAL_OVERRIDE : /*Use game.override_dir (U, D, L, R) to decide your next move*/ 
         if (curr_command == MANUAL_OVERRIDE) {
-           rgb[0] = 220;
+           rgb[0] = 0;
            rgb[1] = 220;
            rgb[2] = 0;
         }
+        Serial.println("detect_intersection...");
         options = detect_intersection();
+        Serial.println("detect_intersection - done");
         if (options > 0) {
           decide_direction(options);
+        } else {
+          //globalHeading = '0'; 
         }
         if(globalHeading!='0'){
           line_follow();
@@ -743,19 +751,20 @@ void loop() {
     }
     
   #else  
-    // Non-map based motor control goes here
-    //red = 0; green = 0; blue = 0;
-    //debug_colour();
-   // decide_direction(detect_intersection());
-    uint8_t options;
-    if ((options = detect_intersection()) > 0) {
-      decide_direction(options);
-    }
-    line_follow();
-    /*if(moveFlag){
-      moveFlag = 0;
-      move_robot();
-    }*/
+//    // Non-map based motor control goes here
+//    //red = 0; green = 0; blue = 0;
+//    //debug_colour();
+//   // decide_direction(detect_intersection());
+//    uint8_t options;
+//    
+//    if ((options = detect_intersection()) > 0) {
+//      decide_direction(options);
+//    }
+//    line_follow();
+//    /*if(moveFlag){
+//      moveFlag = 0;
+//      move_robot();
+//    }*/
   #endif
   
   if(millis()-loopTime>500){
@@ -788,6 +797,7 @@ void update_game() {
   int i;
   game_state_t game_buf;
   //noInterrupts();
+  Serial.println("update_game...");
   readingRadio = 1;
   #ifdef DEBUG_RF
     Serial.println("Updating Game...");
@@ -813,20 +823,23 @@ void update_game() {
 //  lastRadioUpdateTime = millis();
   //interrupts();
   radio_flag = 0;
-  
+  Serial.println("update_game - done");
 }
 
 uint8_t checksum(game_state_t *g) {
+    Serial.println("checksum...");
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
         sum += (((char *)g)[i] & (1 << j)) >> j;
      }
   }
+    Serial.println("checksum - done");
   return sum;
 }
 
 void set_checksum() {
+    Serial.println("set_checksum...");
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
@@ -834,10 +847,12 @@ void set_checksum() {
      }
   }
   game.header = sum;
+  Serial.println("set_checksum - done");
 }
 
 /**    MOVEMENT FUNCTIONS    **/
 void init_heading(){
+  Serial.println("init_heading...");
   line_pos_t readTop = lineTop.get_line();
   line_pos_t readRight = lineRight.get_line();
   line_pos_t readBottom = lineBottom.get_line();
@@ -854,6 +869,7 @@ void init_heading(){
     //something is probably wrong
     globalHeading = 'u';
   }
+    Serial.println("init_heading - done");
 }
 
 uint8_t detect_intersection() {
@@ -947,6 +963,7 @@ uint8_t detect_intersection() {
 }
 
 bool align2intersection() {
+  Serial.println("align2intersection...");
   if(globalHeading=='0'){
     return true;
   }
@@ -1003,11 +1020,13 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
+  Serial.println("align2intersection - done");
   return ret;
 }  
   
 
 void line_follow(){
+  Serial.println("line_follow...");
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -1061,9 +1080,12 @@ void line_follow(){
       updateSpeed(m_backRight,-M_SPEED);
     }
   }
+    Serial.println("line_follow - done");
+
 }
 
 void get_line_alignment(LineSensor **l_F,LineSensor **l_B){
+      Serial.println("get_line_alignment...");
     switch(globalHeading){
     case 'u' :
       *l_F = &lineTop;
@@ -1086,10 +1108,14 @@ void get_line_alignment(LineSensor **l_F,LineSensor **l_B){
       *l_B = &lineBottom;
       break;
   }
+        Serial.println("get_line_alignment - done");
+
 }
 
 void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **m_bL,AccelStepper **m_bR){
   // global heading must have motor direction first
+        Serial.println("get_motor_alignment...");
+
   switch(globalHeading){
     case 'u' :
       *m_fL = &m_topLeft;
@@ -1122,13 +1148,18 @@ void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **
       *m_bR = &m_bottomRight;
       break;
   }
+          Serial.println("get_motor_alignment - done");
+
 }
 
 void move_flag(){
+  Serial.println("move_flag...");
   moveFlag = 1;
+  Serial.println("move_flag - done");
 }
 
 void move_robot() {
+  Serial.println("move_robot...");
   if(readingRadio){
     return;
   }
@@ -1156,22 +1187,31 @@ void move_robot() {
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
   m_bottomRight.runSpeed();
+    Serial.println("move_robot - done");
+
 }
 
 void updateSpeed(AccelStepper *thisMotor,int newSpeed){
+    Serial.println("update_speed...");
   int speedVal = (int)thisMotor->speed();
   if(speedVal!=newSpeed){
     thisMotor->setSpeed(newSpeed);
+
   }
+        Serial.println("update_speed - done");
+
 }
 
 void decide_direction(uint8_t options){  
-  Serial.print("Global heading: ");
-  Serial.println((char)globalHeading);
-  Serial.print("Passed in line options: ");
-  Serial.println(options,BIN);
-  Serial.print("Manual player request heading: ");
-  Serial.println(player_direction,BIN);
+  Serial.println("decide_direction...");
+  #ifdef PRINT_DECISION
+    Serial.print("Global heading: ");
+    Serial.println((char)globalHeading);
+    Serial.print("Passed in line options: ");
+    Serial.println(options,BIN);
+    Serial.print("Manual player request heading: ");
+    Serial.println(player_direction,BIN);
+  #endif
   heading_t newHeading;
   heading_t directionList[4];
   uint8_t directionInts[4];
@@ -1210,6 +1250,8 @@ void decide_direction(uint8_t options){
       globalHeading = '0';
       player_direction = 0;
     }
+      Serial.println("decide_direction - done");
+
     return;
   }
   // This else is to
@@ -1220,6 +1262,7 @@ void decide_direction(uint8_t options){
     uint8_t randSelect;
     uint8_t valid  = 0;
     while(valid==0){
+      Serial.println("invalid decision");
       randSelect = millis()%4;
       //Serial.print("rand select = ");
       //Serial.println(randSelect);
@@ -1231,6 +1274,8 @@ void decide_direction(uint8_t options){
       //delay(200);
     }
     globalHeading = newHeading;
+      Serial.println("decide_direction - done");
+
     return;  
 //    newHeading = opposite_heading;
 //    while (newHeading == opposite_heading) {
@@ -1305,6 +1350,8 @@ void decide_direction(uint8_t options){
     //newHeading = directionList[i];
     globalHeading = directionList[i];
   }  
+    Serial.println("decide_direction - done");
+
 }
 
 /**    MAP NAVIGATION FUNCTIONS    **/
