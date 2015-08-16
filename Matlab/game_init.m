@@ -1,7 +1,7 @@
 global mySerial;
 % Create a game state global variable
 global game;
-mySerial = serial('COM23', 'BaudRate', 57600, 'Terminator', '');
+mySerial = serial('COM3', 'BaudRate', 57600, 'Terminator', '');
 fopen(mySerial);
 % To clean up ALL open com ports, run this line
 % fclose(instrfind);

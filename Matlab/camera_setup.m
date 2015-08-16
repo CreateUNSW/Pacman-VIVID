@@ -14,7 +14,8 @@ function camera_setup()
     global cam;
     % camList = webcamlist
     delete(cam);
-    cam = webcam(1) % can set exposure and other properties from this handle
+    cam = webcam(2) % can set exposure and other properties from this handle
     cam.Resolution = '352x288';
+    cam.Zoom = 1;
 %     cam.ExposureMode = 'manual';
 %     cam.WhiteBalanceMode = 'manual';

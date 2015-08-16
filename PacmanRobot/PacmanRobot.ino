@@ -1,4 +1,4 @@
-//#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
+#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
 
 
 uint8_t red = 0;
@@ -341,8 +341,8 @@ void init_motors() {
   m_topRight.disableOutputs();
   m_bottomLeft.disableOutputs();
   m_bottomRight.disableOutputs();
-  Timer1.initialize(500);  // 100 us hopefully fast enough for variable speeds
-  Timer1.attachInterrupt( move_robot );  // interrupt sets motion flag
+  //Timer1.initialize(500);  // 100 us hopefully fast enough for variable speeds
+  //Timer1.attachInterrupt( move_robot );  // interrupt sets motion flag
 }
 
 void init_light_sensors(){
