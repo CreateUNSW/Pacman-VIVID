@@ -1,5 +1,6 @@
 //#define DEBUG_RF   // Debug messages related to updating the game state + internals from RF
 #define PRINT_DECISION // Debug messages used during decide direction
+//#define DEBUG_ALL // Print messages for (nearly) every function
 
 
 uint8_t red = 0;
@@ -123,6 +124,36 @@ typedef struct {
  */
 
 typedef enum {LEFT,CENTRE,RIGHT,NONE} line_pos_t;
+//#define LINE_MULTI_1 A0
+//#define LINE_MULTI_2 A1
+
+class Multiplexer
+{
+public:
+  Multiplexer(uint8_t analogPin, uint8_t s0, uint8_t s1, uint8_t s2);
+  uint16_t read_from(uint8_t index);
+private:
+  uint8_t _analogPin;
+  uint8_t _s[3];
+};
+
+Multiplexer::Multiplexer(uint8_t analogPin, uint8_t s0, uint8_t s1, uint8_t s2){
+  _analogPin = analogPin; _s[0] = s0; _s[1] = s1; _s[2] = s2;
+  for(int i=0; i<3; ++i){
+    pinMode(_s[i], OUTPUT);
+  }
+}
+
+uint16_t Multiplexer::read_from(uint8_t index){
+  for(int i=0; i<3; ++i){
+    digitalWrite(_s[i], index&(1<<i));
+  }
+  delayMicroseconds(1);
+  return analogRead(_analogPin);
+}
+
+Multiplexer multiplexer1(0,6,7,8);
+Multiplexer multiplexer2(1,7,8,9);
 
 class LineSensor 
 {
@@ -131,6 +162,7 @@ public:
   line_pos_t get_line();
   void init_calibrate();
   void calibrate();
+  uint16_t read_from(uint8_t index);
 private:
   uint8_t _pins[4];
   uint16_t _min[4];
@@ -148,11 +180,21 @@ LineSensor::LineSensor(uint8_t pin1,uint8_t pin2,uint8_t pin3, uint8_t pin4){
   }
 }
 
+uint16_t LineSensor::read_from(uint8_t index){
+  if(index<=7){
+    return multiplexer1.read_from(index);
+  } else if (index<=15){
+    return multiplexer2.read_from(index-8);
+  } else {
+    return 0; // error in input to function
+  }
+}
+
 line_pos_t LineSensor::get_line(){
   int curLine[4];
   int tripCount=0, sum=0, i=0;
   for(;i<4;i++){
-    curLine[i] = (analogRead(_pins[i])<_threshold[i]);
+    curLine[i] = (read_from(_pins[i])<_threshold[i]);
     tripCount += curLine[i];
     curLine[i]*=(2*i-3);
     sum += curLine[i];
@@ -208,11 +250,31 @@ const uint8_t pacStrip [4][5] = {{0,1,8,9,10},{2,3,11,12,13},{4,5,14,15,16},{6,7
 #define NUMPIXELS      20// (max for Pacman?)
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
-AccelStepper m_topLeft(AccelStepper::HALF4WIRE,26,28,22,24,false);
-AccelStepper m_topRight(AccelStepper::HALF4WIRE,27,29,23,25,false);
-AccelStepper m_bottomLeft(AccelStepper::HALF4WIRE,36,38,32,34,false);
-AccelStepper m_bottomRight(AccelStepper::HALF4WIRE,37,39,33,35,false);
+// new stepper driver configuration
+#define MOTOR1_DIR  22
+#define MOTOR1_STEP 24
+#define MOTOR1_EN   23
 
+#define MOTOR2_DIR  26
+#define MOTOR2_STEP 28
+#define MOTOR2_EN   27
+
+#define MOTOR3_DIR  30
+#define MOTOR3_STEP 32
+#define MOTOR3_EN   31
+
+#define MOTOR4_DIR  34
+#define MOTOR4_STEP 36
+#define MOTOR4_EN   35
+
+AccelStepper m_topLeft(AccelStepper::DRIVER,MOTOR1_STEP,MOTOR1_DIR);
+AccelStepper m_topRight(AccelStepper::DRIVER,MOTOR2_STEP,MOTOR2_DIR);
+AccelStepper m_bottomLeft(AccelStepper::DRIVER,MOTOR3_STEP,MOTOR3_DIR);
+AccelStepper m_bottomRight(AccelStepper::DRIVER,MOTOR4_STEP,MOTOR4_DIR);
+
+// even with changes, still define light sensor in terms of pins 0-15
+// Multiplexer 1: 0-7
+// Multiplexer 2: 8-15
 LineSensor lineTop(3,2,1,0);
 LineSensor lineLeft(7,6,5,4);
 LineSensor lineBottom(11,10,9,8);
@@ -314,10 +376,10 @@ void calc_new_square(int *x,int*y,heading_t h,int d);
 /**    SET UP   **/
 bool radio_flag = 0;
 void check_radio() {
-   Serial.println("check_radio...");
-   radio_flag = 1; 
-   Serial.println("check_radio - done");
-
+   #ifdef DEBUG_ALL
+   Serial.println("set radio flag");
+   #endif
+   radio_flag = 1;
 }
 void init_radio() {
   radio.begin();
@@ -337,10 +399,17 @@ void init_motors() {
   m_topRight.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomLeft.setMaxSpeed(STEPPER_MAX_SPEED);
   m_bottomRight.setMaxSpeed(STEPPER_MAX_SPEED);
+  
   m_topLeft.setSpeed(0);
   m_topRight.setSpeed(0);
   m_bottomLeft.setSpeed(0);
   m_bottomRight.setSpeed(0);
+  
+  m_topLeft.setEnablePin(MOTOR1_EN);
+  m_topRight.setEnablePin(MOTOR2_EN);
+  m_bottomLeft.setEnablePin(MOTOR3_EN);
+  m_bottomRight.setEnablePin(MOTOR4_EN);
+  
   m_topLeft.disableOutputs();
   m_topRight.disableOutputs();
   m_bottomLeft.disableOutputs();
@@ -572,18 +641,23 @@ void setup() {
 //       game is still updated normally, including if the person changes their input
 #define MANUAL_OVERRIDE_THRESHOLD 10000
 void loop() {
-  //Serial.println("start loop");
-  //Serial.print("curr_command: ");
-  //Serial.println(curr_command);
-  //Serial.print("globalHeading: ");
-  //Serial.println(globalHeading);
-  delay(10);
-//  if (!digitalRead(45)) {
-//    delay(50);
-//    while (!digitalRead(45));
-//    delay(50);
-//    setup();
-//  }
+  #ifdef DEBUG_ALL
+    Serial.println("start loop");
+    Serial.print("curr_command: ");
+    Serial.println(curr_command);
+    Serial.print("globalHeading: ");
+    Serial.println(globalHeading);
+    delay(10); // ????? why was this here
+  #endif
+  
+  // touch switch stop
+  if (!digitalRead(45)) {
+   delay(50);
+    while (!digitalRead(45));
+    delay(50);
+    setup();
+  }
+  
   #ifdef USE_RADIO
     
 //    Serial.println(millis() - manual_override_timer);  
@@ -600,12 +674,14 @@ void loop() {
         Serial.println("RF: MANUAL_OVERRIDE PERIOD LAPSED : RETURN TO RANDOM PLAY");
       #endif
       init_heading();
+      #ifdef DEBUG_RF
         Serial.print("Found heading: '");
         Serial.print(globalHeading);
         Serial.println("'");
-        rgb[0] = 220;
-        rgb[1] = 220;
-        rgb[2] = 0;
+      #endif
+      rgb[0] = 220;
+      rgb[1] = 220;
+      rgb[2] = 0;
     }
     // Make sure the game header is consistent with the checksum 
     if (game.header == checksum(&game)) {
@@ -797,7 +873,6 @@ void update_game() {
   int i;
   game_state_t game_buf;
   //noInterrupts();
-  Serial.println("update_game...");
   readingRadio = 1;
   #ifdef DEBUG_RF
     Serial.println("Updating Game...");
@@ -820,26 +895,34 @@ void update_game() {
     game.header = -1;
   }
   readingRadio = 0;
-//  lastRadioUpdateTime = millis();
+  //lastRadioUpdateTime = millis();
   //interrupts();
   radio_flag = 0;
-  Serial.println("update_game - done");
+  #ifdef DEBUG_RF
+    Serial.println("update_game - done");
+  #endif
 }
 
 uint8_t checksum(game_state_t *g) {
+  #ifdef DEBUG_RF
     Serial.println("checksum...");
+  #endif
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
         sum += (((char *)g)[i] & (1 << j)) >> j;
      }
   }
+  #ifdef DEBUG_RF
     Serial.println("checksum - done");
+  #endif
   return sum;
 }
 
 void set_checksum() {
+  #ifdef DEBUG_RF
     Serial.println("set_checksum...");
+  #endif
   uint8_t i, j, sum = 0;
   for (i = 1; i < GAME_SIZE; i++) {
      for (j = 0; j < 8; j++) {
@@ -847,12 +930,16 @@ void set_checksum() {
      }
   }
   game.header = sum;
-  Serial.println("set_checksum - done");
+  #ifdef DEBUG_RF
+    Serial.println("set_checksum - done");
+  #endif
 }
 
 /**    MOVEMENT FUNCTIONS    **/
 void init_heading(){
-  Serial.println("init_heading...");
+  #ifdef DEBUG_ALL
+    Serial.println("init_heading...");
+  #endif
   line_pos_t readTop = lineTop.get_line();
   line_pos_t readRight = lineRight.get_line();
   line_pos_t readBottom = lineBottom.get_line();
@@ -869,7 +956,9 @@ void init_heading(){
     //something is probably wrong
     globalHeading = 'u';
   }
+  #ifdef DEBUG_ALL
     Serial.println("init_heading - done");
+  #endif
 }
 
 uint8_t detect_intersection() {
@@ -963,7 +1052,9 @@ uint8_t detect_intersection() {
 }
 
 bool align2intersection() {
-  Serial.println("align2intersection...");
+  #ifdef DEBUG_ALL
+    Serial.println("align2intersection...");
+  #endif
   if(globalHeading=='0'){
     return true;
   }
@@ -1020,13 +1111,17 @@ bool align2intersection() {
   updateSpeed(&m_topRight,m_tR_speed);
   updateSpeed(&m_bottomLeft,m_bL_speed);
   updateSpeed(&m_bottomRight,m_bR_speed);
-  Serial.println("align2intersection - done");
+  #ifdef DEBUG_ALL
+    Serial.println("align2intersection - done");
+  #endif
   return ret;
 }  
   
 
 void line_follow(){
-  Serial.println("line_follow...");
+  #ifdef DEBUG_ALL
+    Serial.println("line_follow...");
+  #endif
   // use of pointers helps translate robot movement functions based on direction
   AccelStepper *m_frontLeft;
   AccelStepper *m_frontRight;
@@ -1080,13 +1175,16 @@ void line_follow(){
       updateSpeed(m_backRight,-M_SPEED);
     }
   }
+  #ifdef DEBUG_ALL
     Serial.println("line_follow - done");
-
+  #endif
 }
 
 void get_line_alignment(LineSensor **l_F,LineSensor **l_B){
-      Serial.println("get_line_alignment...");
-    switch(globalHeading){
+  #ifdef DEBUG_ALL
+    Serial.println("get_line_alignment");
+  #endif
+  switch(globalHeading){
     case 'u' :
       *l_F = &lineTop;
       *l_B = &lineBottom;
@@ -1108,14 +1206,13 @@ void get_line_alignment(LineSensor **l_F,LineSensor **l_B){
       *l_B = &lineBottom;
       break;
   }
-        Serial.println("get_line_alignment - done");
-
 }
 
 void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **m_bL,AccelStepper **m_bR){
   // global heading must have motor direction first
-        Serial.println("get_motor_alignment...");
-
+  #ifdef DEBUG_ALL
+    Serial.println("get_motor_alignment");
+  #endif
   switch(globalHeading){
     case 'u' :
       *m_fL = &m_topLeft;
@@ -1148,18 +1245,19 @@ void get_motor_alignment(AccelStepper **m_fL,AccelStepper **m_fR,AccelStepper **
       *m_bR = &m_bottomRight;
       break;
   }
-          Serial.println("get_motor_alignment - done");
-
 }
 
 void move_flag(){
-  Serial.println("move_flag...");
+  #ifdef DEBUG_ALL
+    Serial.println("set move flag");
+  #endif
   moveFlag = 1;
-  Serial.println("move_flag - done");
 }
 
 void move_robot() {
-  Serial.println("move_robot...");
+  #ifdef DEBUG_ALL
+    Serial.println("move_robot...");
+  #endif
   if(readingRadio){
     return;
   }
@@ -1187,23 +1285,26 @@ void move_robot() {
   m_topRight.runSpeed();
   m_bottomLeft.runSpeed();
   m_bottomRight.runSpeed();
+  #ifdef DEBUG_ALL
     Serial.println("move_robot - done");
-
+  #endif
 }
 
 void updateSpeed(AccelStepper *thisMotor,int newSpeed){
-    Serial.println("update_speed...");
+  #ifdef DEBUG_ALL
+    Serial.println("update_speed");
+  #endif
   int speedVal = (int)thisMotor->speed();
   if(speedVal!=newSpeed){
     thisMotor->setSpeed(newSpeed);
 
   }
-        Serial.println("update_speed - done");
-
 }
 
-void decide_direction(uint8_t options){  
-  Serial.println("decide_direction...");
+void decide_direction(uint8_t options){
+  #ifdef DEBUG_ALL  
+    Serial.println("decide_direction...");
+  #endif
   #ifdef PRINT_DECISION
     Serial.print("Global heading: ");
     Serial.println((char)globalHeading);
@@ -1262,20 +1363,15 @@ void decide_direction(uint8_t options){
     uint8_t randSelect;
     uint8_t valid  = 0;
     while(valid==0){
-      Serial.println("invalid decision");
-      randSelect = millis()%4;
-      //Serial.print("rand select = ");
-      //Serial.println(randSelect);
-      
+      randSelect = millis()%4;      
       newHeading = randPriority[randSelect];
-      //Serial.println((char)newHeading);
       tempDir = heading2binary(newHeading);
       valid = ((tempDir&options)>0);
-      //delay(200);
     }
     globalHeading = newHeading;
+    #ifdef DEBUG_ALL
       Serial.println("decide_direction - done");
-
+    #endif
     return;  
 //    newHeading = opposite_heading;
 //    while (newHeading == opposite_heading) {
@@ -1349,9 +1445,10 @@ void decide_direction(uint8_t options){
   } else {
     //newHeading = directionList[i];
     globalHeading = directionList[i];
-  }  
+  }
+  #ifdef DEBUG_ALL
     Serial.println("decide_direction - done");
-
+  #endif
 }
 
 /**    MAP NAVIGATION FUNCTIONS    **/
